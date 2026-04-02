@@ -2,6 +2,11 @@ import json
 import demistomock as demisto
 from CommonServerPython import *
 
+OPERATION_MAP = {
+    4: "Approved",
+    5: "Denied",
+}
+
 
 def normalize_to_list(data) -> list:
     """Accept a JSON list or a dict with numeric string keys (e.g. {"0": {...}, "1": {...}})."""
@@ -15,10 +20,9 @@ def normalize_to_list(data) -> list:
 def join_cert_to_audit_logs(audit_logs: list, new_certs: list) -> list:
     """Left-join new_certs into audit_logs using AuditIdentifier == CARecordId as the key.
 
-    Every audit log entry is kept. Cert fields are attached where a match exists.
-    cert_matched = True | False indicates whether a cert was found for the entry.
+    Output fields per row:
+      Timestamp, User, CARecordId, Operation, RequesterName, IssuedCN, TemplateName, Thumbprint
     """
-    # Index certs by CARecordId (string-normalised)
     cert_map: dict = {}
     for cert in new_certs:
         ca_record_id = str(cert.get("CARecordId", "")).strip()
@@ -28,17 +32,26 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list) -> list:
     result: list = []
     for entry in audit_logs:
         audit_id = str(entry.get("AuditIdentifier", "")).strip()
-        matched_cert = cert_map.get(audit_id)
+        cert = cert_map.get(audit_id)
 
-        joined = dict(entry)  # copy all audit log fields
-        if matched_cert:
-            joined["cert_matched"] = True
-            joined["cert_data"] = matched_cert
-        else:
-            joined["cert_matched"] = False
-            joined["cert_data"] = None
+        operation_raw = entry.get("Operation")
+        try:
+            operation_raw = int(operation_raw)
+        except (TypeError, ValueError):
+            pass
+        operation = OPERATION_MAP.get(operation_raw, operation_raw)
 
-        result.append(joined)
+        row = {
+            "Timestamp": entry.get("Timestamp"),
+            "User": entry.get("User"),
+            "CARecordId": audit_id,
+            "Operation": operation,
+            "RequesterName": cert.get("RequesterName") if cert else None,
+            "IssuedCN": cert.get("IssuedCN") if cert else None,
+            "TemplateName": cert.get("TemplateName") if cert else None,
+            "Thumbprint": cert.get("Thumbprint") if cert else None,
+        }
+        result.append(row)
 
     return result
 
@@ -72,7 +85,7 @@ def main():
             "HumanReadable": tableToMarkdown(
                 "Joined Cert Audit Logs",
                 joined,
-                headers=["AuditIdentifier", "User", "Operation", "Timestamp", "EntityType", "cert_matched", "cert_data"],
+                headers=["Timestamp", "User", "CARecordId", "Operation", "RequesterName", "IssuedCN", "TemplateName", "Thumbprint"],
                 removeNull=False,
             ),
             "EntryContext": {
