@@ -1,0 +1,36 @@
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">
+  <thead>
+    <tr>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">Timestamp</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">User</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">CARecordId</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">Operation</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">RequesterName</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">IssuedCN</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">TemplateName</th>
+      <th style="padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;">Thumbprint</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background:#ffffff;">
+      <td style="padding:6px 12px;border:1px solid #ddd;">2026-04-01T13:09:12.980Z</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\klane</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">415462</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">Approved</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\pranav.gangurde</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">example.domain.com</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">DigiCert-OV-SSL</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">A1B2C3D4E5F6...</td>
+    </tr>
+    <tr style="background:#f9f9f9;">
+      <td style="padding:6px 12px;border:1px solid #ddd;">2026-04-01T13:10:05.123Z</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\klane</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">415463</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">Denied</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
+      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
+      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
+      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
+    </tr>
+  </tbody>
+</table>

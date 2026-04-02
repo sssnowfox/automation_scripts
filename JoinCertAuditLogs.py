@@ -56,6 +56,31 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list) -> list:
     return result
 
 
+HEADERS = ["Timestamp", "User", "CARecordId", "Operation", "RequesterName", "IssuedCN", "TemplateName", "Thumbprint"]
+
+
+def build_html_table(rows: list) -> str:
+    def cell(val):
+        return f"<td style='padding:6px 12px;border:1px solid #ddd;'>{val if val is not None else ''}</td>"
+
+    header_cells = "".join(
+        f"<th style='padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;'>{h}</th>"
+        for h in HEADERS
+    )
+    body_rows = ""
+    for i, row in enumerate(rows):
+        bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
+        cells = "".join(cell(row.get(h)) for h in HEADERS)
+        body_rows += f"<tr style='background:{bg};'>{cells}</tr>"
+
+    return (
+        "<table style='border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;'>"
+        f"<thead><tr>{header_cells}</tr></thead>"
+        f"<tbody>{body_rows}</tbody>"
+        "</table>"
+    )
+
+
 def main():
     try:
         args = demisto.args()
@@ -75,8 +100,10 @@ def main():
             return_error("new_certs must be a JSON list or numeric-keyed object")
 
         joined = join_cert_to_audit_logs(audit_logs, new_certs)
+        html_table = build_html_table(joined)
 
         demisto.setContext("JoinedCertAuditLogs", joined)
+        demisto.setContext("JoinedCertAuditLogsHTML", html_table)
 
         demisto.results({
             "Type": entryTypes["note"],
@@ -85,11 +112,12 @@ def main():
             "HumanReadable": tableToMarkdown(
                 "Joined Cert Audit Logs",
                 joined,
-                headers=["Timestamp", "User", "CARecordId", "Operation", "RequesterName", "IssuedCN", "TemplateName", "Thumbprint"],
+                headers=HEADERS,
                 removeNull=False,
             ),
             "EntryContext": {
                 "JoinedCertAuditLogs": joined,
+                "JoinedCertAuditLogsHTML": html_table,
             },
         })
 
