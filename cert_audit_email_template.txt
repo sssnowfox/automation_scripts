@@ -12,25 +12,15 @@
     </tr>
   </thead>
   <tbody>
-    <tr style="background:#ffffff;">
-      <td style="padding:6px 12px;border:1px solid #ddd;">2026-04-01T13:09:12.980Z</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\klane</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">415462</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">Approved</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\pranav.gangurde</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">example.domain.com</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">DigiCert-OV-SSL</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">A1B2C3D4E5F6...</td>
-    </tr>
-    <tr style="background:#f9f9f9;">
-      <td style="padding:6px 12px;border:1px solid #ddd;">2026-04-01T13:10:05.123Z</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">AFI-AD\klane</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">415463</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;">Denied</td>
-      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
-      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
-      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
-      <td style="padding:6px 12px;border:1px solid #ddd;"></td>
+    <tr>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.Timestamp}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.User}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.CARecordId}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.Operation}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.RequesterName}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.IssuedCN}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.TemplateName}</td>
+      <td style="padding:6px 12px;border:1px solid #ddd;">${JoinedCertAuditLogs.Thumbprint}</td>
     </tr>
   </tbody>
 </table>
