@@ -1,34 +1,10 @@
-#!/usr/bin/env python3
-"""
-json_to_html_table.py
----------------------
-Convert a JSON array (or numeric-keyed object) to a styled HTML table.
-
-Usage:
-    # from a file
-    python json_to_html_table.py input.json
-
-    # from stdin
-    cat input.json | python json_to_html_table.py
-
-    # write output to a file
-    python json_to_html_table.py input.json -o output.html
-
-    # specify which columns to include (and their order)
-    python json_to_html_table.py input.json --headers Timestamp User Operation
-"""
-
-import argparse
 import json
-import sys
+import demistomock as demisto
+from CommonServerPython import *
 
-
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
 
 def normalize_to_list(data) -> list:
-    """Accept a JSON list or a dict with numeric string keys."""
+    """Accept a JSON list or a dict with numeric string keys (e.g. {"0": {...}, "1": {...}})."""
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
@@ -46,37 +22,20 @@ def collect_headers(rows: list) -> list:
     return list(seen.keys())
 
 
-# ---------------------------------------------------------------------------
-# core renderer
-# ---------------------------------------------------------------------------
-
-def build_html_table(rows: list, headers: list | None = None) -> str:
-    """Generate a styled HTML table from a list of dicts.
-
-    Args:
-        rows:    List of dicts (one per table row).
-        headers: Column names to include, in order.  If None, all keys found
-                 across all rows are used.
-
-    Returns:
-        A self-contained HTML string containing the <table>.
-    """
+def build_html_table(rows: list, headers: list = None) -> str:
+    """Generate a styled HTML table from a list of dicts for use as email htmlBody."""
     if headers is None:
         headers = collect_headers(rows)
 
-    th_style = (
-        "padding:6px 12px;border:1px solid #ddd;"
-        "background:#f2f2f2;text-align:left;white-space:nowrap;"
-    )
-    td_style = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
+    th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
+    td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
-    header_cells = "".join(f"<th style='{th_style}'>{h}</th>" for h in headers)
-
+    header_cells = "".join(f"<th style='{th}'>{h}</th>" for h in headers)
     body_rows = ""
     for i, row in enumerate(rows):
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
         cells = "".join(
-            f"<td style='{td_style}'>{row.get(h) if row.get(h) is not None else ''}</td>"
+            f"<td style='{td}'>{row.get(h) if row.get(h) is not None else ''}</td>"
             for h in headers
         )
         body_rows += f"<tr style='background:{bg};'>{cells}</tr>"
@@ -89,71 +48,46 @@ def build_html_table(rows: list, headers: list | None = None) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-def parse_args(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Convert a JSON array to a styled HTML table."
-    )
-    parser.add_argument(
-        "input",
-        nargs="?",
-        help="Path to JSON file.  Reads from stdin if omitted.",
-    )
-    parser.add_argument(
-        "-o", "--output",
-        help="Write HTML to this file instead of stdout.",
-    )
-    parser.add_argument(
-        "--headers",
-        nargs="+",
-        metavar="COLUMN",
-        help="Columns to include (and their order).  Defaults to all keys.",
-    )
-    return parser.parse_args(argv)
-
-
-def main(argv=None):
-    args = parse_args(argv)
-
-    # --- read input ---
+def main():
     try:
-        if args.input:
-            with open(args.input, encoding="utf-8") as fh:
-                raw = fh.read()
-        else:
-            raw = sys.stdin.read()
-    except OSError as exc:
-        sys.exit(f"ERROR reading input: {exc}")
+        args = demisto.args()
 
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        sys.exit(f"ERROR parsing JSON: {exc}")
+        # --- required: the JSON data to render ---
+        raw_data = args.get("json_data", "[]")
+        data_raw = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        rows = normalize_to_list(data_raw)
 
-    rows = normalize_to_list(data)
-    if not rows:
-        sys.exit("ERROR: JSON resolved to an empty list.")
+        if not isinstance(rows, list):
+            return_error("json_data must be a JSON array or a numeric-keyed object")
 
-    # validate every item is a dict
-    if not all(isinstance(r, dict) for r in rows):
-        sys.exit("ERROR: every element in the JSON array must be an object (dict).")
+        # --- optional: comma-separated list of columns to include ---
+        headers_arg = args.get("headers", "").strip()
+        headers = [h.strip() for h in headers_arg.split(",") if h.strip()] if headers_arg else None
 
-    html = build_html_table(rows, headers=args.headers)
+        html_table = build_html_table(rows, headers=headers)
 
-    # --- write output ---
-    if args.output:
-        try:
-            with open(args.output, "w", encoding="utf-8") as fh:
-                fh.write(html)
-            print(f"Wrote HTML table to {args.output}", file=sys.stderr)
-        except OSError as exc:
-            sys.exit(f"ERROR writing output: {exc}")
-    else:
-        print(html)
+        demisto.setContext("JsonToHtmlTable", html_table)
+
+        demisto.results({
+            "Type": entryTypes["note"],
+            "ContentsFormat": formats["json"],
+            "Contents": rows,
+            "HumanReadable": tableToMarkdown(
+                "JSON to HTML Table",
+                rows,
+                headers=headers,
+                removeNull=False,
+            ),
+            "EntryContext": {
+                "JsonToHtmlTable": html_table,
+            },
+        })
+
+    except json.JSONDecodeError as e:
+        return_error(f"Failed to parse json_data: {e}")
+    except Exception as e:
+        return_error(f"Unexpected error in JsonToHtmlTable: {e}")
 
 
-if __name__ == "__main__":
+if __name__ in ("__main__", "__builtin__", "builtins"):
     main()
