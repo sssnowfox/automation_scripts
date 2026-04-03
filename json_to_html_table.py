@@ -66,7 +66,6 @@ def main():
 
         headers_arg = args.get("headers", "").strip()
         if headers_arg:
-            # Keep only headers that actually exist in the data, in the order specified
             requested = [h.strip() for h in headers_arg.split(",") if h.strip()]
             headers = [h for h in requested if h in all_keys]
             if not headers:
@@ -75,7 +74,6 @@ def main():
             headers = all_keys
 
         output_key = args.get("output_key") or "result"
-
         html_table = build_html_table(rows, headers=headers)
 
         return_results(CommandResults(
@@ -90,20 +88,10 @@ def main():
             ),
         ))
 
-    except json.JSONDecodeError as e:
-        return_error(f"Failed to parse json_data: {e}")
+    except ValueError as e:
+        return_error("Failed to parse json_data: {}".format(e))
     except Exception as e:
-        return_error(f"Unexpected error in JsonToHtmlTable: {e}")
-
-
-if __name__ in ("__main__", "__builtin__", "builtins"):
-    main()
-
-
-    except json.JSONDecodeError as e:
-        return_error(f"Failed to parse json_data: {e}")
-    except Exception as e:
-        return_error(f"Unexpected error in JsonToHtmlTable: {e}")
+        return_error("Unexpected error in JsonToHtmlTable: {}".format(e))
 
 
 if __name__ in ("__main__", "__builtin__", "builtins"):
