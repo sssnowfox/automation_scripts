@@ -80,7 +80,7 @@ def main():
 
         return_results(CommandResults(
             outputs_prefix=output_key,
-            outputs_key_field=output_key,
+            outputs_key_field="",
             outputs=html_table,
             readable_output=tableToMarkdown(
                 "JSON to HTML Table",
