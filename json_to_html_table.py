@@ -60,9 +60,12 @@ def main():
         if not isinstance(rows, list):
             return_error("json_data must be a JSON array or a numeric-keyed object")
 
+        if not rows:
+            return_error("json_data resolved to an empty list")
+
         # --- optional: comma-separated list of columns to include ---
         headers_arg = args.get("headers", "").strip()
-        headers = [h.strip() for h in headers_arg.split(",") if h.strip()] if headers_arg else None
+        headers = [h.strip() for h in headers_arg.split(",") if h.strip()] if headers_arg else collect_headers(rows)
 
         html_table = build_html_table(rows, headers=headers)
 
