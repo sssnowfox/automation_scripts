@@ -74,13 +74,13 @@ def main():
         else:
             headers = all_keys
 
-        output_key = args.get("output_key", "JsonToHtmlTable").strip()
+        output_key = args.get("output_key") or "result"
 
         html_table = build_html_table(rows, headers=headers)
 
         return_results(CommandResults(
-            outputs_prefix=output_key,
-            outputs_key_field="",
+            outputs_prefix="JsonToHTMLTable",
+            outputs_key_field=output_key,
             outputs=html_table,
             readable_output=tableToMarkdown(
                 "JSON to HTML Table",
