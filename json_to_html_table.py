@@ -4,20 +4,12 @@ from CommonServerPython import *
 
 
 def normalize_to_list(data) -> list:
-    """Accept a JSON list, a single-row dict, or a numeric-keyed container dict.
-
-    XSOAR may pass context values as:
-      - list  → use as-is
-      - {"0": {...}, "1": {...}}  → numeric-keyed container, expand to list
-      - {"AuditIdentifier": ..., ...}  → single row dict, wrap in list
-    """
+    """Accept a JSON list, a single-row dict, or a numeric-keyed container dict."""
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
-        # Only treat as a numeric-keyed container when ALL keys are digits
         if data and all(k.isdigit() for k in data.keys()):
             return [data[k] for k in sorted(data.keys(), key=lambda x: int(x))]
-        # Otherwise it is a single row — wrap it
         return [data]
     return []
 
@@ -30,6 +22,20 @@ def collect_headers(rows: list) -> list:
             for k in row.keys():
                 seen[k] = None
     return list(seen.keys())
+
+
+def get_nested(obj, path: str):
+    """Navigate incident context by dot-separated key path.
+
+    e.g. get_nested(ctx, "subplaybook-1.api_query_result.requestresult")
+    """
+    for key in path.split('.'):
+        if not isinstance(obj, dict):
+            return None
+        obj = obj.get(key)
+        if obj is None:
+            return None
+    return obj
 
 
 def build_html_table(rows: list, headers: list = None) -> str:
@@ -62,18 +68,40 @@ def main():
     try:
         args = demisto.args()
 
-        # --- required: the JSON data to render ---
-        raw_data = args.get("json_data", "[]")
-        data_raw = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        # ------------------------------------------------------------------
+        # Two ways to supply data:
+        #
+        # 1. context_path (recommended)
+        #    Pass the dot-separated path to the list inside incident context,
+        #    e.g. "subplaybook-1.api_query_result.requestresult".
+        #    The script reads the full list directly from demisto.context(),
+        #    bypassing XSOAR's default behaviour of calling the script once
+        #    per item when a list is passed as an argument.
+        #
+        # 2. json_data
+        #    Pass the data as a JSON string (the entire array serialised).
+        #    Works correctly only when the caller explicitly serialises the
+        #    list to a string before passing it (e.g. via a JsonDumps
+        #    transformer in the playbook task).
+        # ------------------------------------------------------------------
+
+        context_path = args.get("context_path", "").strip()
+        raw_data = args.get("json_data", "").strip()
+
+        if context_path:
+            ctx = demisto.context()
+            data_raw = get_nested(ctx, context_path)
+            if data_raw is None:
+                return_error(f"context_path '{context_path}' not found in incident context")
+        elif raw_data:
+            data_raw = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        else:
+            return_error("Provide either context_path or json_data")
+
         rows = normalize_to_list(data_raw)
-
-        if not isinstance(rows, list):
-            return_error("json_data must be a JSON array or a numeric-keyed object")
-
         if not rows:
-            return_error("json_data resolved to an empty list")
+            return_error("Input resolved to an empty list")
 
-        # --- optional: comma-separated list of columns to include ---
         headers_arg = args.get("headers", "").strip()
         headers = [h.strip() for h in headers_arg.split(",") if h.strip()] if headers_arg else collect_headers(rows)
 
