@@ -4,11 +4,21 @@ from CommonServerPython import *
 
 
 def normalize_to_list(data) -> list:
-    """Accept a JSON list or a dict with numeric string keys (e.g. {"0": {...}, "1": {...}})."""
+    """Accept a JSON list, a single-row dict, or a numeric-keyed container dict.
+
+    XSOAR may pass context values as:
+      - list  → use as-is
+      - {"0": {...}, "1": {...}}  → numeric-keyed container, expand to list
+      - {"AuditIdentifier": ..., ...}  → single row dict, wrap in list
+    """
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
-        return [data[k] for k in sorted(data.keys(), key=lambda x: int(x) if x.isdigit() else x)]
+        # Only treat as a numeric-keyed container when ALL keys are digits
+        if data and all(k.isdigit() for k in data.keys()):
+            return [data[k] for k in sorted(data.keys(), key=lambda x: int(x))]
+        # Otherwise it is a single row — wrap it
+        return [data]
     return []
 
 
