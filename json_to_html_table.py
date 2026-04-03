@@ -106,24 +106,21 @@ def main():
         headers_arg = args.get("headers", "").strip()
         headers = [h.strip() for h in headers_arg.split(",") if h.strip()] if headers_arg else collect_headers(rows)
 
+        output_key = args.get("output_key", "JsonToHtmlTable").strip()
+
         html_table = build_html_table(rows, headers=headers)
 
-        demisto.setContext("JsonToHtmlTable", html_table)
-
-        demisto.results({
-            "Type": entryTypes["note"],
-            "ContentsFormat": formats["json"],
-            "Contents": rows,
-            "HumanReadable": tableToMarkdown(
+        return_results(CommandResults(
+            outputs_prefix=output_key,
+            outputs_key_field=output_key,
+            outputs=html_table,
+            readable_output=tableToMarkdown(
                 "JSON to HTML Table",
                 rows,
                 headers=headers,
                 removeNull=False,
             ),
-            "EntryContext": {
-                "JsonToHtmlTable": html_table,
-            },
-        })
+        ))
 
     except json.JSONDecodeError as e:
         return_error(f"Failed to parse json_data: {e}")
