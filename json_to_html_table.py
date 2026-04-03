@@ -112,8 +112,14 @@ def main():
 
         demisto.results({
             "Type": entryTypes["note"],
-            "ContentsFormat": formats["html"],
-            "Contents": html_table,
+            "ContentsFormat": formats["json"],
+            "Contents": rows,
+            "HumanReadable": tableToMarkdown(
+                "JSON to HTML Table",
+                rows,
+                headers=headers,
+                removeNull=False,
+            ),
             "EntryContext": {
                 "JsonToHtmlTable": html_table,
             },
