@@ -86,7 +86,7 @@ def main():
         # ------------------------------------------------------------------
 
         context_path = args.get("context_path", "").strip()
-        raw_data = args.get("json_data", "").strip()
+        raw_data = args.get("json_data", "")
 
         if context_path:
             ctx = demisto.context()
@@ -94,6 +94,7 @@ def main():
             if data_raw is None:
                 return_error(f"context_path '{context_path}' not found in incident context")
         elif raw_data:
+            # raw_data may be a list (when isArray:true) or a JSON string
             data_raw = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
         else:
             return_error("Provide either context_path or json_data")
