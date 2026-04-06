@@ -24,30 +24,68 @@ def collect_headers(rows: list) -> list:
     return list(seen.keys())
 
 
-def build_html_table(rows: list, headers: list = None) -> str:
-    """Generate a styled HTML table from a list of dicts for use as email htmlBody."""
-    if headers is None:
-        headers = collect_headers(rows)
+def build_vertical_table(rows: list, headers: list) -> str:
+    """Standard table: headers as columns, each item as a row.
 
+    | Key1 | Key2 | Key3 |
+    |------|------|------|
+    | v1   | v2   | v3   |
+    | v1   | v2   | v3   |
+    """
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
-    header_cells = "".join(f"<th style='{th}'>{h}</th>" for h in headers)
+    header_cells = "".join("<th style='{}'>{}</th>".format(th, h) for h in headers)
     body_rows = ""
     for i, row in enumerate(rows):
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
         cells = "".join(
-            f"<td style='{td}'>{row.get(h) if row.get(h) is not None else ''}</td>"
+            "<td style='{}'>{}</td>".format(td, row.get(h) if row.get(h) is not None else "")
             for h in headers
         )
-        body_rows += f"<tr style='background:{bg};'>{cells}</tr>"
+        body_rows += "<tr style='background:{};'>{}</tr>".format(bg, cells)
 
     return (
         "<table style='border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;'>"
-        f"<thead><tr>{header_cells}</tr></thead>"
-        f"<tbody>{body_rows}</tbody>"
+        "<thead><tr>{}</tr></thead>"
+        "<tbody>{}</tbody>"
         "</table>"
-    )
+    ).format(header_cells, body_rows)
+
+
+def build_horizontal_table(rows: list, headers: list) -> str:
+    """Transposed table: headers as rows, each item as a column.
+
+    | Field | Item 0 | Item 1 | ... |
+    |-------|--------|--------|-----|
+    | Key1  | v1     | v1     | ... |
+    | Key2  | v2     | v2     | ... |
+    """
+    th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
+    td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
+
+    # Build column header row: "Field" + one cell per item
+    col_headers = "<th style='{}'>Field</th>".format(th)
+    for i in range(len(rows)):
+        col_headers += "<th style='{}'>Item {}</th>".format(th, i)
+
+    # One row per key
+    body_rows = ""
+    for i, key in enumerate(headers):
+        bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
+        key_cell = "<td style='{}'><strong>{}</strong></td>".format(th, key)
+        value_cells = "".join(
+            "<td style='{}'>{}</td>".format(td, row.get(key) if row.get(key) is not None else "")
+            for row in rows
+        )
+        body_rows += "<tr style='background:{};'>{}{}</tr>".format(bg, key_cell, value_cells)
+
+    return (
+        "<table style='border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;'>"
+        "<thead><tr>{}</tr></thead>"
+        "<tbody>{}</tbody>"
+        "</table>"
+    ).format(col_headers, body_rows)
 
 
 def main():
@@ -73,8 +111,13 @@ def main():
         else:
             headers = all_keys
 
+        layout = (args.get("layout") or "vertical").strip().lower()
         output_key = args.get("output_key") or "result"
-        html_table = build_html_table(rows, headers=headers)
+
+        if layout == "horizontal":
+            html_table = build_horizontal_table(rows, headers)
+        else:
+            html_table = build_vertical_table(rows, headers)
 
         return_results(CommandResults(
             outputs_prefix="JsonToHTMLTable",
