@@ -92,9 +92,17 @@ def main():
     try:
         args = demisto.args()
 
-        raw_data = args.get("json_data", "")
-        # raw_data may be a Python list (isArray:true) or a JSON string
-        data_raw = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        raw_array = args.get("json_data_array")  # isArray:true in XSOAR settings
+        raw_item  = args.get("json_data_item")   # isArray:false in XSOAR settings
+
+        if raw_array:
+            data_raw = json.loads(raw_array) if isinstance(raw_array, str) else raw_array
+            default_layout = "vertical"
+        elif raw_item:
+            data_raw = json.loads(raw_item) if isinstance(raw_item, str) else raw_item
+            default_layout = "horizontal"
+        else:
+            return_error("Provide either json_data_array or json_data_item")
 
         rows = normalize_to_list(data_raw)
         if not rows:
@@ -111,7 +119,8 @@ def main():
         else:
             headers = all_keys
 
-        layout = (args.get("layout") or "vertical").strip().lower()
+        # layout argument overrides the default derived from which input was used
+        layout = (args.get("layout") or default_layout).strip().lower()
         output_key = args.get("output_key") or "result"
 
         if layout == "horizontal":
