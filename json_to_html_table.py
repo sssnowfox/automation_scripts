@@ -14,9 +14,28 @@ def normalize_to_list(data) -> list:
     return []
 
 
+def flatten_row(row, prefix=""):
+    """Recursively flatten a nested dict into dot-notation keys.
+
+    {"metadata": {"requester": {"firstname": "John"}}}
+    ->
+    {"metadata.requester.firstname": "John"}
+    """
+    flat = {}
+    for key, value in row.items():
+        full_key = "{}.{}".format(prefix, key) if prefix else key
+        if isinstance(value, dict):
+            flat.update(flatten_row(value, full_key))
+        elif isinstance(value, list):
+            flat[full_key] = json.dumps(value)
+        else:
+            flat[full_key] = value
+    return flat
+
+
 def collect_headers(rows: list) -> list:
     """Return all keys found across every row, preserving first-seen order."""
-    seen: dict = {}
+    seen = {}
     for row in rows:
         if isinstance(row, dict):
             for k in row.keys():
@@ -25,13 +44,7 @@ def collect_headers(rows: list) -> list:
 
 
 def build_vertical_table(rows: list, headers: list) -> str:
-    """Standard table: headers as columns, each item as a row.
-
-    | Key1 | Key2 | Key3 |
-    |------|------|------|
-    | v1   | v2   | v3   |
-    | v1   | v2   | v3   |
-    """
+    """Standard table: headers as columns, each item as a row."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
@@ -54,22 +67,14 @@ def build_vertical_table(rows: list, headers: list) -> str:
 
 
 def build_horizontal_table(rows: list, headers: list) -> str:
-    """Transposed table: headers as rows, each item as a column.
-
-    | Field | Item 0 | Item 1 | ... |
-    |-------|--------|--------|-----|
-    | Key1  | v1     | v1     | ... |
-    | Key2  | v2     | v2     | ... |
-    """
+    """Transposed table: headers as rows, each item as a column."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
-    # Build column header row: "Field" + one cell per item
     col_headers = "<th style='{}'>Field</th>".format(th)
     for i in range(len(rows)):
         col_headers += "<th style='{}'>Item {}</th>".format(th, i)
 
-    # One row per key
     body_rows = ""
     for i, key in enumerate(headers):
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
@@ -97,16 +102,19 @@ def main():
 
         if raw_array:
             data_raw = json.loads(raw_array) if isinstance(raw_array, str) else raw_array
-            default_layout = "vertical"
         elif raw_item:
             data_raw = json.loads(raw_item) if isinstance(raw_item, str) else raw_item
-            default_layout = "horizontal"
         else:
             return_error("Provide either json_data_array or json_data_item")
 
         rows = normalize_to_list(data_raw)
         if not rows:
             return_error("Input resolved to an empty list")
+
+        # Flatten nested dicts when requested
+        should_flatten = (args.get("flatten") or "false").strip().lower()
+        if should_flatten == "true":
+            rows = [flatten_row(r) if isinstance(r, dict) else r for r in rows]
 
         all_keys = collect_headers(rows)
 
@@ -119,8 +127,7 @@ def main():
         else:
             headers = all_keys
 
-        # layout argument overrides the default derived from which input was used
-        layout = (args.get("layout") or default_layout).strip().lower()
+        layout = (args.get("layout") or "vertical").strip().lower()
         output_key = args.get("output_key") or "result"
 
         if layout == "horizontal":
