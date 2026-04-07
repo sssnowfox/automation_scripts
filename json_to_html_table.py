@@ -145,17 +145,32 @@ def main():
         if not rows:
             return_error("Input resolved to an empty list")
 
-        # flatten: handle both Python bool True and string "true" from XSOAR
-        flatten_arg = args.get("flatten")
-        if flatten_arg is True or str(flatten_arg).strip().lower() == "true":
+        # flatten: handle both Python bool True and string "true"/"1"/"yes" from XSOAR
+        flatten_arg = args.get("flatten", "")
+        do_flatten = flatten_arg is True or str(flatten_arg).strip().lower() in ("true", "1", "yes")
+
+        demisto.info("JsonToHtmlTable: flatten_arg={!r} do_flatten={}".format(flatten_arg, do_flatten))
+
+        if do_flatten:
             rows = [flatten_row(r) if isinstance(r, dict) else r for r in rows]
+            demisto.info("JsonToHtmlTable: after flatten, sample keys={}".format(
+                list(rows[0].keys())[:20] if rows and isinstance(rows[0], dict) else []))
 
         all_keys = collect_headers(rows)
 
-        headers_arg = args.get("headers", "").strip()
+        headers_arg = args.get("headers", "")
+        if isinstance(headers_arg, str):
+            headers_arg = headers_arg.strip()
         if headers_arg:
             requested = [h.strip() for h in headers_arg.split(",") if h.strip()]
-            headers = [h for h in requested if h in all_keys]
+            headers = []
+            for k in all_keys:
+                if k in requested:
+                    headers.append(k)
+                # When flatten is active, also include sub-keys of any requested parent key
+                # e.g. "DetailedKeyUsage" in requested → include "DetailedKeyUsage.CrlSign"
+                elif do_flatten and any(k.startswith(req + ".") for req in requested):
+                    headers.append(k)
             if not headers:
                 return_error("None of the specified headers match keys in the data")
         else:
