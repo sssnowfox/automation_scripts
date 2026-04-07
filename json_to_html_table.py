@@ -149,11 +149,11 @@ def main():
         flatten_arg = args.get("flatten", "")
         do_flatten = flatten_arg is True or str(flatten_arg).strip().lower() in ("true", "1", "yes")
 
-        demisto.info("JsonToHtmlTable: flatten_arg={!r} do_flatten={}".format(flatten_arg, do_flatten))
+        print("JsonToHtmlTable: flatten_arg={!r} do_flatten={}".format(flatten_arg, do_flatten))
 
         if do_flatten:
             rows = [flatten_row(r) if isinstance(r, dict) else r for r in rows]
-            demisto.info("JsonToHtmlTable: after flatten, sample keys={}".format(
+            print("JsonToHtmlTable: after flatten, sample keys={}".format(
                 list(rows[0].keys())[:20] if rows and isinstance(rows[0], dict) else []))
 
         all_keys = collect_headers(rows)
