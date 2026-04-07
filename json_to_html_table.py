@@ -33,7 +33,15 @@ def flatten_row(row, prefix=""):
     return flat
 
 
-def collect_headers(rows: list) -> list:
+def safe_str(value):
+    """Convert a value to a display string.
+    Dicts and lists are serialised as JSON (not Python repr).
+    """
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    if value is None:
+        return ""
+    return str(value)
     """Return all keys found across every row, preserving first-seen order."""
     seen = {}
     for row in rows:
@@ -53,7 +61,7 @@ def build_vertical_table(rows: list, headers: list) -> str:
     for i, row in enumerate(rows):
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
         cells = "".join(
-            "<td style='{}'>{}</td>".format(td, row.get(h) if row.get(h) is not None else "")
+            "<td style='{}'>{}</td>".format(td, safe_str(row.get(h)))
             for h in headers
         )
         body_rows += "<tr style='background:{};'>{}</tr>".format(bg, cells)
@@ -80,7 +88,7 @@ def build_horizontal_table(rows: list, headers: list) -> str:
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
         key_cell = "<td style='{}'><strong>{}</strong></td>".format(th, key)
         value_cells = "".join(
-            "<td style='{}'>{}</td>".format(td, row.get(key) if row.get(key) is not None else "")
+            "<td style='{}'>{}</td>".format(td, safe_str(row.get(key)))
             for row in rows
         )
         body_rows += "<tr style='background:{};'>{}{}</tr>".format(bg, key_cell, value_cells)
@@ -112,8 +120,10 @@ def main():
             return_error("Input resolved to an empty list")
 
         # Flatten nested dicts when requested
-        should_flatten = (args.get("flatten") or "false").strip().lower()
-        if should_flatten == "true":
+        # Handle both string "true" and Python boolean True from XSOAR
+        flatten_arg = args.get("flatten")
+        should_flatten = flatten_arg is True or str(flatten_arg).strip().lower() == "true"
+        if should_flatten:
             rows = [flatten_row(r) if isinstance(r, dict) else r for r in rows]
 
         all_keys = collect_headers(rows)
