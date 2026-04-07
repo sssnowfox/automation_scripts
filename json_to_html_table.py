@@ -18,8 +18,7 @@ def flatten_row(row, prefix=""):
     """Recursively flatten a nested dict into dot-notation keys.
 
     {"metadata": {"requester": {"firstname": "John"}}}
-    ->
-    {"metadata.requester.firstname": "John"}
+    -> {"metadata.requester.firstname": "John"}
     """
     flat = {}
     for key, value in row.items():
@@ -34,14 +33,17 @@ def flatten_row(row, prefix=""):
 
 
 def safe_str(value):
-    """Convert a value to a display string.
-    Dicts and lists are serialised as JSON (not Python repr).
+    """Render a cell value as a string.
+    Dicts and lists are serialised as JSON rather than Python repr.
     """
     if isinstance(value, (dict, list)):
         return json.dumps(value)
     if value is None:
         return ""
     return str(value)
+
+
+def collect_headers(rows) -> list:
     """Return all keys found across every row, preserving first-seen order."""
     seen = {}
     for row in rows:
@@ -51,7 +53,7 @@ def safe_str(value):
     return list(seen.keys())
 
 
-def build_vertical_table(rows: list, headers: list) -> str:
+def build_vertical_table(rows, headers) -> str:
     """Standard table: headers as columns, each item as a row."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
@@ -74,7 +76,7 @@ def build_vertical_table(rows: list, headers: list) -> str:
     ).format(header_cells, body_rows)
 
 
-def build_horizontal_table(rows: list, headers: list) -> str:
+def build_horizontal_table(rows, headers) -> str:
     """Transposed table: headers as rows, each item as a column."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
@@ -119,11 +121,9 @@ def main():
         if not rows:
             return_error("Input resolved to an empty list")
 
-        # Flatten nested dicts when requested
-        # Handle both string "true" and Python boolean True from XSOAR
+        # flatten: handle both Python bool True and string "true" from XSOAR
         flatten_arg = args.get("flatten")
-        should_flatten = flatten_arg is True or str(flatten_arg).strip().lower() == "true"
-        if should_flatten:
+        if flatten_arg is True or str(flatten_arg).strip().lower() == "true":
             rows = [flatten_row(r) if isinstance(r, dict) else r for r in rows]
 
         all_keys = collect_headers(rows)
