@@ -1,3 +1,4 @@
+import ast
 import json
 import demistomock as demisto
 from CommonServerPython import *
@@ -14,6 +15,28 @@ def normalize_to_list(data) -> list:
     return []
 
 
+def coerce_value(value):
+    """If value is a string that looks like a serialised dict/list, try to parse it.
+
+    XSOAR sometimes hands nested context values as Python repr strings
+    (e.g. "{'CrlSign': False, 'DigitalSignature': True}") instead of real dicts.
+    Try JSON first, then ast.literal_eval as a fallback for Python repr.
+    """
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not (s.startswith("{") or s.startswith("[")):
+        return value
+    try:
+        return json.loads(s)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return ast.literal_eval(s)
+    except (ValueError, SyntaxError):
+        return value
+
+
 def flatten_row(row, prefix=""):
     """Recursively flatten a nested dict into dot-notation keys.
 
@@ -23,6 +46,7 @@ def flatten_row(row, prefix=""):
     flat = {}
     for key, value in row.items():
         full_key = "{}.{}".format(prefix, key) if prefix else key
+        value = coerce_value(value)
         if isinstance(value, dict):
             flat.update(flatten_row(value, full_key))
         elif isinstance(value, list):
