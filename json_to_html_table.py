@@ -50,7 +50,14 @@ def flatten_row(row, prefix=""):
         if isinstance(value, dict):
             flat.update(flatten_row(value, full_key))
         elif isinstance(value, list):
-            flat[full_key] = json.dumps(value)
+            # If every element is a dict, flatten with numeric index keys
+            # e.g. ExtendedKeyUsages -> ExtendedKeyUsages.0.DisplayName, ExtendedKeyUsages.1.DisplayName
+            coerced = [coerce_value(item) for item in value]
+            if coerced and all(isinstance(item, dict) for item in coerced):
+                for idx, item in enumerate(coerced):
+                    flat.update(flatten_row(item, "{}.{}".format(full_key, idx)))
+            else:
+                flat[full_key] = json.dumps(value)
         else:
             flat[full_key] = value
     return flat
