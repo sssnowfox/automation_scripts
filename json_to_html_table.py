@@ -181,7 +181,7 @@ def main():
         else:
             headers = all_keys
 
-        layout = (args.get("layout") or "horizontal").strip().lower()
+        layout = (args.get("layout") or "vertical").strip().lower()
         output_key = args.get("output_key") or "result"
 
         if layout == "vertical":
