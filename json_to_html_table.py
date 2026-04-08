@@ -84,8 +84,8 @@ def collect_headers(rows) -> list:
     return list(seen.keys())
 
 
-def build_vertical_table(rows, headers) -> str:
-    """Standard table: headers as columns, each item as a row."""
+def build_horizontal_table(rows, headers) -> str:
+    """Horizontal table: headers as columns, each item as a row."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
@@ -107,8 +107,8 @@ def build_vertical_table(rows, headers) -> str:
     ).format(header_cells, body_rows)
 
 
-def build_horizontal_table(rows, headers) -> str:
-    """Transposed table: headers as rows, each item as a column."""
+def build_vertical_table(rows, headers) -> str:
+    """Vertical table: headers as rows on the left, each item as a column."""
     th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
     td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
 
@@ -153,7 +153,7 @@ def main():
             return_error("Input resolved to an empty list")
 
         # flatten: handle both Python bool True and string "true"/"1"/"yes" from XSOAR
-        flatten_arg = args.get("flatten", "")
+        flatten_arg = args.get("flatten") or ""
         do_flatten = flatten_arg is True or str(flatten_arg).strip().lower() in ("true", "1", "yes")
 
         print("JsonToHtmlTable: flatten_arg={!r} do_flatten={}".format(flatten_arg, do_flatten))
@@ -165,9 +165,7 @@ def main():
 
         all_keys = collect_headers(rows)
 
-        headers_arg = args.get("headers", "")
-        if isinstance(headers_arg, str):
-            headers_arg = headers_arg.strip()
+        headers_arg = args.get("headers") or ""
         if headers_arg:
             requested = [h.strip() for h in headers_arg.split(",") if h.strip()]
             headers = []
@@ -183,13 +181,13 @@ def main():
         else:
             headers = all_keys
 
-        layout = (args.get("layout") or "vertical").strip().lower()
+        layout = (args.get("layout") or "horizontal").strip().lower()
         output_key = args.get("output_key") or "result"
 
-        if layout == "horizontal":
-            html_table = build_horizontal_table(rows, headers)
-        else:
+        if layout == "vertical":
             html_table = build_vertical_table(rows, headers)
+        else:
+            html_table = build_horizontal_table(rows, headers)
 
         return_results(CommandResults(
             outputs_prefix="JsonToHTMLTable",
