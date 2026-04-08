@@ -62,6 +62,7 @@ def main():
 
         raw_audit = args.get("audit_logs", "[]")
         raw_certs = args.get("new_certs", "[]")
+        output_key = args.get("output_key") or "CARecordId"
 
         audit_logs_raw = json.loads(raw_audit) if isinstance(raw_audit, str) else raw_audit
         new_certs_raw = json.loads(raw_certs) if isinstance(raw_certs, str) else raw_certs
@@ -76,19 +77,22 @@ def main():
 
         joined = join_cert_to_audit_logs(audit_logs, new_certs)
 
-        demisto.results({
-            "Type": entryTypes["note"],
-            "ContentsFormat": formats["json"],
-            "Contents": joined,
-            "EntryContext": {
-                "JoinedCertAuditLogs": joined,
-            },
-        })
+        return_results(CommandResults(
+            outputs_prefix="joined_data",
+            outputs_key_field=output_key,
+            outputs=joined,
+            readable_output=tableToMarkdown(
+                "Joined Cert Audit Logs",
+                joined,
+                headers=["Timestamp", "User", "CARecordId", "Operation", "RequesterName", "IssuedCN", "TemplateName", "Thumbprint"],
+                removeNull=False,
+            ),
+        ))
 
     except json.JSONDecodeError as e:
-        return_error(f"Failed to parse input JSON: {e}")
+        return_error("Failed to parse input JSON: {}".format(e))
     except Exception as e:
-        return_error(f"Unexpected error in JoinCertAuditLogs: {e}")
+        return_error("Unexpected error in JoinCertAuditLogs: {}".format(e))
 
 
 if __name__ in ("__main__", "__builtin__", "builtins"):
