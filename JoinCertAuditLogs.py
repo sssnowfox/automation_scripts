@@ -80,7 +80,7 @@ def main():
         return_results(CommandResults(
             outputs_prefix="joined_data",
             outputs_key_field=output_key,
-            outputs=joined,
+            outputs={output_key: joined},
             readable_output=tableToMarkdown(
                 "Joined Cert Audit Logs",
                 joined,
