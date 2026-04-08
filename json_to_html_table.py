@@ -86,8 +86,8 @@ def collect_headers(rows) -> list:
 
 def build_horizontal_table(rows, headers) -> str:
     """Horizontal table: headers as columns, each item as a row."""
-    th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;"
-    td = "padding:6px 12px;border:1px solid #ddd;word-break:break-all;"
+    th = "padding:6px 12px;border:1px solid #ddd;background:#f2f2f2;text-align:left;white-space:nowrap;min-width:80px;"
+    td = "padding:6px 12px;border:1px solid #ddd;word-break:break-word;min-width:80px;"
 
     header_cells = "".join("<th style='{}'>{}</th>".format(th, h) for h in headers)
     body_rows = ""
@@ -100,7 +100,7 @@ def build_horizontal_table(rows, headers) -> str:
         body_rows += "<tr style='background:{};'>{}</tr>".format(bg, cells)
 
     return (
-        "<table style='border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;'>"
+        "<table style='border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;width:100%;'>"
         "<thead><tr>{}</tr></thead>"
         "<tbody>{}</tbody>"
         "</table>"
