@@ -60,9 +60,9 @@ def main():
     try:
         args = demisto.args()
 
-        raw_audit = args.get("audit_logs", "[]")
-        raw_certs = args.get("new_certs", "[]")
-        output_key = args.get("output_key") or "CARecordId"
+        raw_audit = args.get("audit_logs") or "[]"
+        raw_certs = args.get("new_certs") or "[]"
+        output_key = args.get("output_key") or "result"
 
         audit_logs_raw = json.loads(raw_audit) if isinstance(raw_audit, str) else raw_audit
         new_certs_raw = json.loads(raw_certs) if isinstance(raw_certs, str) else raw_certs
