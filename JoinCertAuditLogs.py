@@ -1,3 +1,4 @@
+import ast
 import json
 import demistomock as demisto
 from CommonServerPython import *
@@ -6,6 +7,28 @@ OPERATION_MAP = {
     4: "Approved",
     5: "Denied",
 }
+
+
+def coerce_to_dict(item):
+    """If item is a string that looks like a serialised dict, parse it.
+
+    XSOAR sometimes passes context list items as Python repr strings
+    e.g. "{'CARecordId': '415462', ...}" instead of actual dicts.
+    """
+    if isinstance(item, dict):
+        return item
+    if isinstance(item, str):
+        s = item.strip()
+        if s.startswith("{"):
+            try:
+                return json.loads(s)
+            except (ValueError, TypeError):
+                pass
+            try:
+                return ast.literal_eval(s)
+            except (ValueError, SyntaxError):
+                pass
+    return {}
 
 
 def normalize_to_list(data) -> list:
@@ -31,18 +54,21 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list, request_details: 
     """
     cert_map: dict = {}
     for cert in new_certs:
+        cert = coerce_to_dict(cert)
         ca_record_id = str(cert.get("CARecordId") or "").strip()
         if ca_record_id:
             cert_map[ca_record_id] = cert
 
     detail_map: dict = {}
     for detail in request_details:
+        detail = coerce_to_dict(detail)
         ca_request_id = str(detail.get("CARequestId") or "").strip()
         if ca_request_id:
             detail_map[ca_request_id] = detail
 
     result: list = []
     for entry in audit_logs:
+        entry = coerce_to_dict(entry)
         audit_id = str(entry.get("AuditIdentifier") or "").strip()
         cert = cert_map.get(audit_id)
         detail = detail_map.get(audit_id)
