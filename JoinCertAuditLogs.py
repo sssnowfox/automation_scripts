@@ -32,11 +32,13 @@ def coerce_to_dict(item):
 
 
 def normalize_to_list(data) -> list:
-    """Accept a JSON list or a dict with numeric string keys (e.g. {"0": {...}, "1": {...}})."""
+    """Accept a JSON list, a single-row dict, or a numeric-keyed container dict."""
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
-        return [data[k] for k in sorted(data.keys(), key=lambda x: int(x) if x.isdigit() else x)]
+        if data and all(k.isdigit() for k in data.keys()):
+            return [data[k] for k in sorted(data.keys(), key=lambda x: int(x))]
+        return [data]
     return []
 
 
