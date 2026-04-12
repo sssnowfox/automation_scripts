@@ -17,22 +17,35 @@ def normalize_to_list(data) -> list:
     return []
 
 
-def join_cert_to_audit_logs(audit_logs: list, new_certs: list) -> list:
-    """Left-join new_certs into audit_logs using AuditIdentifier == CARecordId as the key.
+def join_cert_to_audit_logs(audit_logs: list, new_certs: list, request_details: list) -> list:
+    """Left-join new_certs and request_details into audit_logs.
+
+    Join keys:
+      audit_logs.AuditIdentifier == new_certs.CARecordId
+      audit_logs.AuditIdentifier == request_details.CARequestId
 
     Output fields per row:
-      Timestamp, User, CARecordId, Operation, RequesterName, IssuedCN, TemplateName, Thumbprint
+      Timestamp, User, CARecordId, Operation,
+      RequesterName, IssuedCN, TemplateName, Thumbprint,
+      StateString, CommonName, DenialComment, Requester, SubmissionDate
     """
     cert_map: dict = {}
     for cert in new_certs:
-        ca_record_id = str(cert.get("CARecordId", "")).strip()
+        ca_record_id = str(cert.get("CARecordId") or "").strip()
         if ca_record_id:
             cert_map[ca_record_id] = cert
 
+    detail_map: dict = {}
+    for detail in request_details:
+        ca_request_id = str(detail.get("CARequestId") or "").strip()
+        if ca_request_id:
+            detail_map[ca_request_id] = detail
+
     result: list = []
     for entry in audit_logs:
-        audit_id = str(entry.get("AuditIdentifier", "")).strip()
+        audit_id = str(entry.get("AuditIdentifier") or "").strip()
         cert = cert_map.get(audit_id)
+        detail = detail_map.get(audit_id)
 
         operation_raw = entry.get("Operation")
         try:
@@ -50,6 +63,11 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list) -> list:
             "IssuedCN": cert.get("IssuedCN") if cert else None,
             "TemplateName": cert.get("TemplateName") if cert else None,
             "Thumbprint": cert.get("Thumbprint") if cert else None,
+            "StateString": detail.get("StateString") if detail else None,
+            "CommonName": detail.get("CommonName") if detail else None,
+            "DenialComment": detail.get("DenialComment") if detail else None,
+            "Requester": detail.get("Requester") if detail else None,
+            "SubmissionDate": detail.get("SubmissionDate") if detail else None,
         }
         result.append(row)
 
@@ -62,20 +80,25 @@ def main():
 
         raw_audit = args.get("audit_logs") or "[]"
         raw_certs = args.get("new_certs") or "[]"
+        raw_details = args.get("request_details") or "[]"
         output_key = args.get("output_key") or "result"
 
         audit_logs_raw = json.loads(raw_audit) if isinstance(raw_audit, str) else raw_audit
         new_certs_raw = json.loads(raw_certs) if isinstance(raw_certs, str) else raw_certs
+        request_details_raw = json.loads(raw_details) if isinstance(raw_details, str) else raw_details
 
         audit_logs = normalize_to_list(audit_logs_raw)
         new_certs = normalize_to_list(new_certs_raw)
+        request_details = normalize_to_list(request_details_raw)
 
         if not isinstance(audit_logs, list):
             return_error("audit_logs must be a JSON list or numeric-keyed object")
         if not isinstance(new_certs, list):
             return_error("new_certs must be a JSON list or numeric-keyed object")
+        if not isinstance(request_details, list):
+            return_error("request_details must be a JSON list or numeric-keyed object")
 
-        joined = join_cert_to_audit_logs(audit_logs, new_certs)
+        joined = join_cert_to_audit_logs(audit_logs, new_certs, request_details)
 
         return_results(CommandResults(
             outputs_prefix="joined_data",
@@ -84,7 +107,9 @@ def main():
             readable_output=tableToMarkdown(
                 "Joined Cert Audit Logs",
                 joined,
-                headers=["Timestamp", "User", "CARecordId", "Operation", "RequesterName", "IssuedCN", "TemplateName", "Thumbprint"],
+                headers=["Timestamp", "User", "CARecordId", "Operation",
+                         "RequesterName", "IssuedCN", "TemplateName", "Thumbprint",
+                         "StateString", "CommonName", "DenialComment", "Requester", "SubmissionDate"],
                 removeNull=False,
             ),
         ))
