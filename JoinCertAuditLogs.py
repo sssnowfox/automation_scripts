@@ -51,8 +51,9 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list, request_details: 
 
     Output fields per row:
       Timestamp, User, CARecordId, Operation,
-      RequesterName, IssuedCN, TemplateName, Thumbprint,
-      StateString, CommonName, DenialComment, Requester, SubmissionDate
+      RequesterName (cert.RequesterName or detail.Requester),
+      CommonName (cert.IssuedCN or detail.CommonName),
+      TemplateName, Thumbprint, StateString, DenialComment
     """
     cert_map: dict = {}
     for cert in new_certs:
@@ -87,15 +88,12 @@ def join_cert_to_audit_logs(audit_logs: list, new_certs: list, request_details: 
             "User": entry.get("User"),
             "CARecordId": audit_id,
             "Operation": operation,
-            "RequesterName": cert.get("RequesterName") if cert else None,
-            "IssuedCN": cert.get("IssuedCN") if cert else None,
+            "RequesterName": (cert.get("RequesterName") if cert else None) or (detail.get("Requester") if detail else None),
+            "CommonName": (cert.get("IssuedCN") if cert else None) or (detail.get("CommonName") if detail else None),
             "TemplateName": cert.get("TemplateName") if cert else None,
             "Thumbprint": cert.get("Thumbprint") if cert else None,
             "StateString": detail.get("StateString") if detail else None,
-            "CommonName": detail.get("CommonName") if detail else None,
             "DenialComment": detail.get("DenialComment") if detail else None,
-            "Requester": detail.get("Requester") if detail else None,
-            "SubmissionDate": detail.get("SubmissionDate") if detail else None,
         }
         result.append(row)
 
@@ -136,8 +134,8 @@ def main():
                 "Joined Cert Audit Logs",
                 joined,
                 headers=["Timestamp", "User", "CARecordId", "Operation",
-                         "RequesterName", "IssuedCN", "TemplateName", "Thumbprint",
-                         "StateString", "CommonName", "DenialComment", "Requester", "SubmissionDate"],
+                         "RequesterName", "CommonName", "TemplateName", "Thumbprint",
+                         "StateString", "DenialComment"],
                 removeNull=False,
             ),
         ))
