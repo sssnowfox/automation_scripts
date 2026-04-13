@@ -68,6 +68,75 @@ def merge_rows(left_row: dict, right_row, conflict_strategy: str) -> dict:
     return merged
 
 
+def parse_output_fields(raw: str) -> list:
+    """Parse a comma-separated string of field names into a list.
+
+    Returns an empty list when raw is blank, meaning "keep all fields".
+    """
+    if not raw or not raw.strip():
+        return []
+    return [f.strip() for f in raw.split(",") if f.strip()]
+
+
+def parse_rename_fields(raw: str) -> list:
+    """Parse a comma-separated string of 'source:target' pairs into an ordered list of tuples.
+
+    Malformed entries (no colon) are silently skipped.
+    """
+    if not raw or not raw.strip():
+        return []
+    pairs = []
+    for token in raw.split(","):
+        token = token.strip()
+        if ":" in token:
+            src, tgt = token.split(":", 1)
+            src, tgt = src.strip(), tgt.strip()
+            if src and tgt:
+                pairs.append((src, tgt))
+    return pairs
+
+
+def apply_field_ops(row: dict, output_fields: list, rename_pairs: list) -> dict:
+    """Apply field selection then rename/merge to a single row.
+
+    Step 1 - output_fields filter:
+      If output_fields is non-empty, drop any field whose source name is not listed.
+
+    Step 2 - rename / merge:
+      Each (src, tgt) pair in rename_pairs renames src to tgt.
+      Multiple sources mapped to the same target name are merged:
+      the first non-null value wins.
+      Fields not referenced in rename_pairs keep their original name.
+    """
+    # Step 1: field selection (operates on source names)
+    if output_fields:
+        row = {k: v for k, v in row.items() if k in output_fields}
+
+    if not rename_pairs:
+        return row
+
+    # Step 2: build target -> [ordered source fields] mapping
+    target_sources: dict = {}
+    for src, tgt in rename_pairs:
+        target_sources.setdefault(tgt, []).append(src)
+
+    renamed_sources = {src for src, _ in rename_pairs}
+
+    result = {}
+    # Fields not involved in any rename keep their original name
+    for k, v in row.items():
+        if k not in renamed_sources:
+            result[k] = v
+
+    # Renamed / merged fields appear under their target name
+    for tgt, sources in target_sources.items():
+        result[tgt] = next(
+            (row[s] for s in sources if s in row and row[s] is not None), None
+        )
+
+    return result
+
+
 def json_table_join(
     left_table: list,
     left_key: str,
@@ -119,6 +188,8 @@ def main():
         join_type = (args.get("join_type") or "left").strip().lower()
         conflict_strategy = (args.get("conflict_strategy") or "prefix").strip().lower()
         output_key = (args.get("output_key") or "result").strip()
+        output_fields = parse_output_fields(args.get("output_fields") or "")
+        rename_pairs = parse_rename_fields(args.get("rename_fields") or "")
 
         if not left_key:
             return_error("left_key is required")
@@ -138,6 +209,9 @@ def main():
         joined = json_table_join(
             left_table, left_key, right_table, right_key, join_type, conflict_strategy
         )
+
+        if output_fields or rename_pairs:
+            joined = [apply_field_ops(row, output_fields, rename_pairs) for row in joined]
 
         return_results(CommandResults(
             outputs_prefix="JSONTableJoin",
