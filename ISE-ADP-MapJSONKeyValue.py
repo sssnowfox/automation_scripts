@@ -30,6 +30,7 @@ def main():
         raw_data = args.get("value")
         target_key = args.get("target_key")
         mapping_str = args.get("mapping_dict", "{}")
+        output_key = args.get("output_key") or "result"
 
         try:
             mapping = json.loads(mapping_str)
@@ -43,7 +44,7 @@ def main():
 
         return_results(CommandResults(
             outputs_prefix="MapJSONKeyValue",
-            outputs_key_field=target_key,
+            outputs_key_field=output_key,
             outputs=processed_data,
             readable_output=tableToMarkdown(
                 "Mapped JSON Key Values",
