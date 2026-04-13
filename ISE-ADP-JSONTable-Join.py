@@ -162,11 +162,14 @@ def apply_field_ops(row: dict, output_fields: list, rename_pairs: list) -> dict:
         if k not in renamed_sources:
             result[k] = v
 
-    # Renamed / merged fields appear under their target name
+    # Renamed / merged fields appear under their target name.
+    # A null result never overwrites a value that is already present.
     for tgt, sources in target_sources.items():
-        result[tgt] = next(
+        value = next(
             (row[s] for s in sources if s in row and row[s] is not None), None
         )
+        if value is not None or tgt not in result:
+            result[tgt] = value
 
     return result
 
