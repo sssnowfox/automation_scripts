@@ -189,7 +189,7 @@ def main():
         conflict_strategy = (args.get("conflict_strategy") or "prefix").strip().lower()
         output_key = (args.get("output_key") or "result").strip()
         output_fields = parse_output_fields(args.get("output_fields") or "")
-        rename_pairs = parse_rename_fields(args.get("rename_fields") or "")
+        rename_pairs = parse_rename_fields(args.get("rename_pairs") or "")
 
         if not left_key:
             return_error("left_key is required")
