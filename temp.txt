@@ -1,0 +1,1 @@
+Common Name:\s*(.*).*Subject Alternative Name\(s\):\s*\["(.*)"\].*Certificate Template:\s*(.*).*Issued:\s*(.*).*Expires:\s*(.*)
