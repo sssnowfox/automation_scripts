@@ -169,13 +169,14 @@ def main():
         if headers_arg:
             requested = [h.strip() for h in headers_arg.split(",") if h.strip()]
             headers = []
-            for k in all_keys:
-                if k in requested:
-                    headers.append(k)
-                # When flatten is active, also include sub-keys of any requested parent key
-                # e.g. "DetailedKeyUsage" in requested → include "DetailedKeyUsage.CrlSign"
-                elif do_flatten and any(k.startswith(req + ".") for req in requested):
-                    headers.append(k)
+            for req in requested:
+                if req in all_keys:
+                    headers.append(req)
+                # When flatten is active, also include sub-keys in data order
+                if do_flatten:
+                    for k in all_keys:
+                        if k.startswith(req + "."):
+                            headers.append(k)
             if not headers:
                 return_error("None of the specified headers match keys in the data")
         else:
