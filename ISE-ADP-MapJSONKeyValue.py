@@ -45,7 +45,7 @@ def main():
         return_results(CommandResults(
             outputs_prefix="MapJSONKeyValue",
             outputs_key_field=output_key,
-            outputs=processed_data,
+            outputs={output_key: processed_data},
             readable_output=tableToMarkdown(
                 "Mapped JSON Key Values",
                 processed_data,
