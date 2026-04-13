@@ -38,7 +38,20 @@ def main():
 
         processed_data = map_table_values(raw_data, target_key, mapping)
 
-        return_results(processed_data)
+        # Derive column headers dynamically from the first row
+        headers = list(processed_data[0].keys()) if processed_data and isinstance(processed_data[0], dict) else []
+
+        return_results(CommandResults(
+            outputs_prefix="MapJSONKeyValue",
+            outputs_key_field=target_key,
+            outputs=processed_data,
+            readable_output=tableToMarkdown(
+                "Mapped JSON Key Values",
+                processed_data,
+                headers=headers,
+                removeNull=False,
+            ),
+        ))
 
     except Exception as e:
         return_error(f"Unexpected error in ISE-ADP-MapJSONKeyValue: {e}")
