@@ -96,11 +96,41 @@ def parse_rename_fields(raw: str) -> list:
     return pairs
 
 
+def extract_field(row: dict, field_spec: str) -> tuple:
+    """Extract a value from row, supporting one level of dot notation.
+
+    'field'           -> (field_spec, row.get('field'))
+    'parent.subfield' -> if row['parent'] is a list, pluck subfield from every item
+                         if row['parent'] is a dict, return row['parent'].get('subfield')
+    Output key is always the full field_spec (e.g. 'SubjectAltNameElements.Value').
+    """
+    if "." not in field_spec:
+        return field_spec, row.get(field_spec)
+
+    parent, subfield = field_spec.split(".", 1)
+    parent_val = row.get(parent)
+
+    if isinstance(parent_val, list):
+        value = [
+            item.get(subfield) if isinstance(item, dict) else None
+            for item in parent_val
+        ]
+    elif isinstance(parent_val, dict):
+        value = parent_val.get(subfield)
+    else:
+        value = None
+
+    return field_spec, value
+
+
 def apply_field_ops(row: dict, output_fields: list, rename_pairs: list) -> dict:
     """Apply field selection then rename/merge to a single row.
 
     Step 1 - output_fields filter:
-      If output_fields is non-empty, drop any field whose source name is not listed.
+      If output_fields is non-empty, only the listed fields are kept.
+      Supports dot notation: 'Parent.SubField' plucks SubField from each item
+      in the Parent list (or from the Parent dict) and stores it under the
+      key 'Parent.SubField'. Use rename_pairs to give it a friendlier name.
 
     Step 2 - rename / merge:
       Each (src, tgt) pair in rename_pairs renames src to tgt.
@@ -108,9 +138,13 @@ def apply_field_ops(row: dict, output_fields: list, rename_pairs: list) -> dict:
       the first non-null value wins.
       Fields not referenced in rename_pairs keep their original name.
     """
-    # Step 1: field selection (operates on source names)
+    # Step 1: field selection with dot-notation support
     if output_fields:
-        row = {k: v for k, v in row.items() if k in output_fields}
+        filtered = {}
+        for spec in output_fields:
+            out_key, value = extract_field(row, spec)
+            filtered[out_key] = value
+        row = filtered
 
     if not rename_pairs:
         return row
