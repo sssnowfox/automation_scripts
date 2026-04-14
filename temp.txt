@@ -1,3 +1,3 @@
-Common Name:\s*([^\n]+)[\s\S]*?Subject Alternative Name\(s\):\s*\["([^"]+)"\][\s\S]*?Expires:\s*([^\n]+)[\s\S]*?Certificate Thumbprint:\s*([A-Fa-f0-9]+)[\s\S]*?Submitted SNOW Queue:\s*(.*?)(?=If you have)
+Common Name:\s*([^\n]+)[\s\S]*?Subject Alternative Name\(s\):\s*\["([^"]+)"\][\s\S]*?Expires:\s*([^\n]+)[\s\S]*?Certificate Thumbprint:\s*([A-Fa-f0-9]+)[\s\S]*?Submitted SNOW Queue:\s*(.*?)(?=[Ii]f you|\n|$)
 
 cert_cn,cert_sans,cert_expiration_date,cert_thumbprint,servicenow_queue
