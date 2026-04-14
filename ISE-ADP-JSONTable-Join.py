@@ -252,6 +252,7 @@ def main():
         if output_fields or rename_pairs:
             joined = [apply_field_ops(row, output_fields, rename_pairs) for row in joined]
 
+        headers = list(joined[0].keys()) if joined else None
         return_results(CommandResults(
             outputs_prefix="JSONTableJoin",
             outputs_key_field=output_key,
@@ -259,6 +260,7 @@ def main():
             readable_output=tableToMarkdown(
                 "JSON Table Join Result",
                 joined,
+                headers=headers,
                 removeNull=False,
             ),
         ))
