@@ -149,27 +149,29 @@ def apply_field_ops(row: dict, output_fields: list, rename_pairs: list) -> dict:
     if not rename_pairs:
         return row
 
-    # Step 2: build target -> [ordered source fields] mapping
+    # Step 2: build lookup structures for rename/merge
     target_sources: dict = {}
     for src, tgt in rename_pairs:
         target_sources.setdefault(tgt, []).append(src)
 
-    renamed_sources = {src for src, _ in rename_pairs}
+    src_to_tgt = {src: tgt for src, tgt in rename_pairs}
+    renamed_sources = set(src_to_tgt.keys())
 
+    # Walk row in its current order (respects output_fields ordering).
+    # Renamed fields are placed at the position of their first source key.
+    # A null result never overwrites a value that is already present.
     result = {}
-    # Fields not involved in any rename keep their original name
     for k, v in row.items():
         if k not in renamed_sources:
             result[k] = v
-
-    # Renamed / merged fields appear under their target name.
-    # A null result never overwrites a value that is already present.
-    for tgt, sources in target_sources.items():
-        value = next(
-            (row[s] for s in sources if s in row and row[s] is not None), None
-        )
-        if value is not None or tgt not in result:
-            result[tgt] = value
+        else:
+            tgt = src_to_tgt[k]
+            if tgt not in result:
+                value = next(
+                    (row[s] for s in target_sources[tgt] if s in row and row[s] is not None), None
+                )
+                if value is not None or tgt not in result:
+                    result[tgt] = value
 
     return result
 
