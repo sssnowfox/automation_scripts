@@ -107,20 +107,17 @@ def main():
 
         headers = extract_table_headers(final_list)
 
-        demisto.results({
-            "Type": entryTypes["note"],
-            "ContentsFormat": formats["json"],
-            "Contents": final_list,
-            "HumanReadable": tableToMarkdown(
+        return_results(CommandResults(
+            outputs_prefix="UpdatedJSONList",
+            outputs_key_field=dedup_key,
+            outputs=final_list,
+            readable_output=tableToMarkdown(
                 f"Updated XSOAR List: {list_name}",
                 final_list,
                 headers=headers or None,
                 removeNull=False,
             ),
-            "EntryContext": {
-                f"UpdatedJSONList(val.{dedup_key} == obj.{dedup_key})": final_list,
-            },
-        })
+        ))
 
     except json.JSONDecodeError as e:
         return_error(f"Failed to parse input JSON: {e}")
