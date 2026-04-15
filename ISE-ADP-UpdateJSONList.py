@@ -81,7 +81,7 @@ def main():
         list_name = args.get("list_name", "")
         raw_new_data = args.get("new_data", "[]")
         dedup_key = args.get("dedup_key", "")
-        output_key = args.get("output_key") or "UpdatedJSONList"
+        output_key = args.get("output_key") or ""
 
         if not list_name:
             return_error("list_name is required")
@@ -102,8 +102,9 @@ def main():
         # Merge with deduplication
         final_list = merge_by_dedup_key(existing_list, incoming_list, dedup_key)
 
-        # Write the merged list back to XSOAR, wrapped under output_key
-        final_json_str = json.dumps({output_key: final_list}, ensure_ascii=False)
+        # Write the merged list back to XSOAR; wrap under output_key if provided
+        payload = {output_key: final_list} if output_key else final_list
+        final_json_str = json.dumps(payload, ensure_ascii=False)
         set_res = demisto.executeCommand("setList", {"listName": list_name, "listData": final_json_str})
         if is_error(set_res):
             return_error(f"Failed to write list '{list_name}': {set_res[0]['Contents']}")
