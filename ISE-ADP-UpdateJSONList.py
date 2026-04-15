@@ -79,6 +79,7 @@ def main():
         list_name = args.get("list_name", "")
         raw_new_data = args.get("new_data", "[]")
         dedup_key = args.get("dedup_key", "")
+        output_key = args.get("output_key") or "UpdatedJSONList"
 
         if not list_name:
             return_error("list_name is required")
@@ -109,8 +110,8 @@ def main():
 
         return_results(CommandResults(
             outputs_prefix="UpdatedJSONList",
-            outputs_key_field=dedup_key,
-            outputs=final_list,
+            outputs_key_field=output_key,
+            outputs={output_key: final_list},
             readable_output=tableToMarkdown(
                 f"Updated XSOAR List: {list_name}",
                 final_list,
