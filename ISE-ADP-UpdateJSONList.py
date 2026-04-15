@@ -20,7 +20,10 @@ def parse_list_contents(raw: str, output_key: str) -> list:
 
     parsed = json.loads(raw)
     if isinstance(parsed, dict):
-        inner = parsed.get(output_key, [])
+        if output_key:
+            inner = parsed.get(output_key, [])
+        else:
+            inner = next(iter(parsed.values()), [])
         return inner if isinstance(inner, list) else [inner]
     if isinstance(parsed, list):
         return parsed
