@@ -10,14 +10,19 @@ KEYFACTOR_OPERATION_MAP = {
 }
 
 
-def normalize_keyfactor_record(raw: dict) -> dict:
-    """Normalize a raw Keyfactor audit record to the internal schema.
+# ---------------------------------------------------------------------------
+# Source 1: Keyfactor audit log  (api_query_result.result[])
+# ---------------------------------------------------------------------------
 
-    Keyfactor audit fields:
+def normalize_keyfactor_audit_record(raw: dict) -> dict:
+    """Normalize a raw Keyfactor audit record.
+
       ImmutableIdentifier -> cert_id
       User                -> operator
-      Timestamp           -> timestamp
-      Operation (int)     -> result ("Approved" / "Denied" / raw int as string)
+      Timestamp           -> audit_timestamp
+      Operation (int)     -> result ("Approved" / "Denied" / int-as-string)
+      AuditIdentifier     -> audit_id
+      EntityType          -> entity_type
     """
     operation = raw.get("Operation")
     result = KEYFACTOR_OPERATION_MAP.get(operation, str(operation) if operation is not None else None)
@@ -25,123 +30,207 @@ def normalize_keyfactor_record(raw: dict) -> dict:
         "cert_id": raw.get("ImmutableIdentifier"),
         "result": result,
         "operator": raw.get("User"),
-        "timestamp": raw.get("Timestamp"),
-        # Preserve extra audit fields for traceability
+        "audit_timestamp": raw.get("Timestamp"),
         "audit_id": raw.get("AuditIdentifier"),
         "entity_type": raw.get("EntityType"),
     }
 
 
-def parse_keyfactor_response(raw_input) -> list:
-    """Accept either:
-    - a pre-normalised list (each item already has cert_id / result / operator)
-    - the raw Keyfactor API envelope: { api_query_result: { result: [...] } }
-    - a bare list of raw Keyfactor audit records
+def parse_keyfactor_audit_response(raw_input) -> list:
+    """Parse Keyfactor audit input into a normalised list.
+
+    Accepts:
+    - API envelope: { "api_query_result": { "result": [...] } }
+    - Bare list of raw audit records (contain ImmutableIdentifier)
+    - Already-normalised list
     """
     if isinstance(raw_input, str):
         raw_input = json.loads(raw_input)
 
-    # Envelope format from the API: { "api_query_result": { "result": [...] } }
     if isinstance(raw_input, dict):
         records = raw_input.get("api_query_result", {}).get("result", [])
-        return [normalize_keyfactor_record(r) for r in records]
+        return [normalize_keyfactor_audit_record(r) for r in records]
 
     if isinstance(raw_input, list):
         if raw_input and "ImmutableIdentifier" in raw_input[0]:
-            # Raw audit records list
-            return [normalize_keyfactor_record(r) for r in raw_input]
-        # Already normalised
-        return raw_input
+            return [normalize_keyfactor_audit_record(r) for r in raw_input]
+        return raw_input  # already normalised
 
     return []
 
 
-def merge_cert_records(xsoar_incidents: list, keyfactor_records: list) -> list:
-    """Merge cert records from XSOAR and Keyfactor, deduplicated by cert_id.
+# ---------------------------------------------------------------------------
+# Source 2: Keyfactor request detail  (api_query_result.requestdetailresult)
+# ---------------------------------------------------------------------------
 
-    Merge rules:
-    - cert_id is the dedup key
-    - Keyfactor data takes precedence (result, operator)
-    - XSOAR supplements requester field
-    - source = "keyfactor_only" | "both" | "xsoar_only"
+def normalize_keyfactor_detail_record(raw: dict) -> dict:
+    """Normalize a raw Keyfactor requestdetailresult record.
+
+      Id               -> cert_id
+      StateString      -> result  ("Approved" / "Denied")
+      Requester        -> kf_requester
+      SubmissionDate   -> submission_date
+      CARequestId      -> ca_request_id
+      CommonName       -> common_name
+      DenialComment    -> denial_comment
+      Template         -> template
+      CertificateAuthority -> certificate_authority
     """
-    # Index XSOAR records by cert_id
-    xsoar_map: dict = {}
-    for record in xsoar_incidents:
-        cert_id = record.get("cert_id")
-        if cert_id is not None:
-            xsoar_map[cert_id] = record
+    return {
+        "cert_id": str(raw.get("Id")) if raw.get("Id") is not None else None,
+        "result": raw.get("StateString"),
+        "kf_requester": raw.get("Requester"),
+        "submission_date": raw.get("SubmissionDate"),
+        "ca_request_id": raw.get("CARequestId"),
+        "common_name": raw.get("CommonName"),
+        "denial_comment": raw.get("DenialComment"),
+        "template": raw.get("Template"),
+        "certificate_authority": raw.get("CertificateAuthority"),
+    }
 
-    # Index Keyfactor records by cert_id (last record wins for duplicate cert_ids)
-    keyfactor_map: dict = {}
-    for record in keyfactor_records:
-        cert_id = record.get("cert_id")
-        if cert_id is not None:
-            keyfactor_map[cert_id] = record
 
+def parse_keyfactor_detail_response(raw_input) -> list:
+    """Parse Keyfactor request-detail input into a normalised list.
+
+    Accepts:
+    - Single API envelope:  { "api_query_result": { "requestdetailresult": {...} } }
+    - List of API envelopes (one per cert)
+    - Already-normalised list
+    """
+    if isinstance(raw_input, str):
+        raw_input = json.loads(raw_input)
+
+    if isinstance(raw_input, dict):
+        detail = raw_input.get("api_query_result", {}).get("requestdetailresult")
+        if detail:
+            return [normalize_keyfactor_detail_record(detail)]
+        return []
+
+    if isinstance(raw_input, list):
+        result = []
+        for item in raw_input:
+            if isinstance(item, dict):
+                # List of envelopes
+                detail = item.get("api_query_result", {}).get("requestdetailresult")
+                if detail:
+                    result.append(normalize_keyfactor_detail_record(detail))
+                elif "Id" in item:
+                    # Raw detail record without envelope
+                    result.append(normalize_keyfactor_detail_record(item))
+                else:
+                    # Already normalised
+                    result.append(item)
+        return result
+
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Merge logic
+# ---------------------------------------------------------------------------
+
+def merge_cert_records(
+    xsoar_incidents: list,
+    keyfactor_audit: list,
+    keyfactor_details: list,
+) -> list:
+    """Merge three sources by cert_id.
+
+    Priority:
+    - result:      keyfactor_detail.StateString > keyfactor_audit.Operation mapping
+    - operator:    keyfactor_audit.User (only audit has this)
+    - requester:   keyfactor_detail.Requester > xsoar.requester
+    - denial info: keyfactor_detail.DenialComment + xsoar.close_notes / close_reason
+    - source flag: "keyfactor_only" | "both" | "xsoar_only"
+    """
+    xsoar_map: dict = {r["cert_id"]: r for r in xsoar_incidents if r.get("cert_id") is not None}
+    audit_map: dict = {r["cert_id"]: r for r in keyfactor_audit if r.get("cert_id") is not None}
+    detail_map: dict = {r["cert_id"]: r for r in keyfactor_details if r.get("cert_id") is not None}
+
+    all_kf_ids = set(audit_map) | set(detail_map)
     merged: list = []
 
-    # Process Keyfactor records first (source of truth for result/operator)
-    for cert_id, kf_record in keyfactor_map.items():
+    # --- Records that exist in at least one Keyfactor source ---
+    for cert_id in all_kf_ids:
+        audit = audit_map.get(cert_id, {})
+        detail = detail_map.get(cert_id, {})
+        xsoar = xsoar_map.get(cert_id, {})
+
+        # result: detail wins (StateString) over audit (Operation mapping)
+        result = detail.get("result") or audit.get("result")
+
+        # requester: detail's Requester wins over XSOAR's requester
+        requester = detail.get("kf_requester") or xsoar.get("requester")
+
         entry = {
             "cert_id": cert_id,
-            "result": kf_record.get("result"),
-            "operator": kf_record.get("operator"),
-            "timestamp": kf_record.get("timestamp"),
-            "audit_id": kf_record.get("audit_id"),
-            "entity_type": kf_record.get("entity_type"),
+            "result": result,
+            "operator": audit.get("operator"),
+            "requester": requester,
+            # timestamps
+            "submission_date": detail.get("submission_date"),
+            "audit_timestamp": audit.get("audit_timestamp"),
+            # Keyfactor detail fields
+            "common_name": detail.get("common_name"),
+            "denial_comment": detail.get("denial_comment"),
+            "template": detail.get("template"),
+            "ca_request_id": detail.get("ca_request_id"),
+            "certificate_authority": detail.get("certificate_authority"),
+            # Keyfactor audit fields
+            "audit_id": audit.get("audit_id"),
+            "entity_type": audit.get("entity_type"),
+            # XSOAR fields
+            "close_notes": xsoar.get("close_notes"),
+            "close_reason": xsoar.get("close_reason"),
+            "source": "both" if xsoar else "keyfactor_only",
         }
-
-        xsoar_record = xsoar_map.get(cert_id)
-        if xsoar_record:
-            entry["requester"] = xsoar_record.get("requester")
-            entry["close_notes"] = xsoar_record.get("close_notes")
-            entry["close_reason"] = xsoar_record.get("close_reason")
-            entry["source"] = "both"
-        else:
-            entry["requester"] = None
-            entry["close_notes"] = None
-            entry["close_reason"] = None
-            entry["source"] = "keyfactor_only"
-
         merged.append(entry)
 
-    # Process XSOAR-only records (not present in Keyfactor)
-    for cert_id, xsoar_record in xsoar_map.items():
-        if cert_id not in keyfactor_map:
-            entry = {
+    # --- Records only in XSOAR ---
+    for cert_id, xsoar in xsoar_map.items():
+        if cert_id not in all_kf_ids:
+            merged.append({
                 "cert_id": cert_id,
                 "result": None,
                 "operator": None,
-                "timestamp": None,
+                "requester": xsoar.get("requester"),
+                "submission_date": None,
+                "audit_timestamp": None,
+                "common_name": None,
+                "denial_comment": None,
+                "template": None,
+                "ca_request_id": None,
+                "certificate_authority": None,
                 "audit_id": None,
                 "entity_type": None,
-                "requester": xsoar_record.get("requester"),
-                "close_notes": xsoar_record.get("close_notes"),
-                "close_reason": xsoar_record.get("close_reason"),
+                "close_notes": xsoar.get("close_notes"),
+                "close_reason": xsoar.get("close_reason"),
                 "source": "xsoar_only",
-            }
-            merged.append(entry)
+            })
 
     return merged
 
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
     try:
         args = demisto.args()
 
         raw_xsoar = args.get("xsoar_incidents", "[]")
-        raw_keyfactor = args.get("keyfactor_records", "{}")
+        raw_audit = args.get("keyfactor_records", "{}")
+        raw_detail = args.get("keyfactor_request_detail", "{}")
 
-        # Accept both JSON strings and already-parsed structures
         xsoar_incidents = json.loads(raw_xsoar) if isinstance(raw_xsoar, str) else raw_xsoar
         if not isinstance(xsoar_incidents, list):
             return_error("xsoar_incidents must be a JSON list")
 
-        # keyfactor_records accepts: API envelope dict, raw audit list, or normalised list
-        keyfactor_records = parse_keyfactor_response(raw_keyfactor)
+        keyfactor_audit = parse_keyfactor_audit_response(raw_audit)
+        keyfactor_details = parse_keyfactor_detail_response(raw_detail)
 
-        merged_list = merge_cert_records(xsoar_incidents, keyfactor_records)
+        merged_list = merge_cert_records(xsoar_incidents, keyfactor_audit, keyfactor_details)
 
         demisto.setContext("MergedCertRecords", merged_list)
 
@@ -152,8 +241,13 @@ def main():
             "HumanReadable": tableToMarkdown(
                 "Merged Cert Records",
                 merged_list,
-                headers=["cert_id", "source", "result", "operator", "requester", "timestamp",
-                         "close_reason", "close_notes", "audit_id", "entity_type"],
+                headers=[
+                    "cert_id", "source", "result", "operator", "requester",
+                    "common_name", "template", "ca_request_id",
+                    "submission_date", "audit_timestamp",
+                    "denial_comment", "close_reason", "close_notes",
+                    "certificate_authority", "audit_id", "entity_type",
+                ],
                 removeNull=False,
             ),
             "EntryContext": {
