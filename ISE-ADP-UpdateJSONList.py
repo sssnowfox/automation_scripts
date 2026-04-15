@@ -6,22 +6,24 @@ from CommonServerPython import *
 LIST_NOT_FOUND_MARKER = "Item not found"
 
 
-def parse_list_contents(raw: str) -> list:
+def parse_list_contents(raw: str, output_key: str) -> list:
     """Parse the raw string returned by getList into a Python list.
 
-    Handles three cases:
-    - Empty string or None  -> empty list (list is blank)
-    - XSOAR "Item not found" response -> empty list (list does not exist yet)
-    - Valid JSON string -> parsed list; a lone dict is wrapped in a list
+    Handles four cases:
+    - Empty string or None          -> empty list (list is blank)
+    - XSOAR "Item not found" marker -> empty list (list does not exist yet)
+    - Dict-wrapped format           -> extract the inner list by output_key
+    - Plain JSON array              -> return as-is (backward compatible)
     """
     if not raw or LIST_NOT_FOUND_MARKER in raw:
         return []
 
     parsed = json.loads(raw)
+    if isinstance(parsed, dict):
+        inner = parsed.get(output_key, [])
+        return inner if isinstance(inner, list) else [inner]
     if isinstance(parsed, list):
         return parsed
-    if isinstance(parsed, dict):
-        return [parsed]
     return []
 
 
@@ -92,7 +94,7 @@ def main():
             return_error(f"Failed to retrieve list '{list_name}': {get_res[0]['Contents']}")
 
         raw_existing = get_res[0].get("Contents", "")
-        existing_list = parse_list_contents(raw_existing)
+        existing_list = parse_list_contents(raw_existing, output_key)
 
         # Parse the incoming new_data (accept JSON string or already-parsed structure)
         incoming_list = normalize_to_list(raw_new_data)
@@ -100,8 +102,8 @@ def main():
         # Merge with deduplication
         final_list = merge_by_dedup_key(existing_list, incoming_list, dedup_key)
 
-        # Write the merged list back to XSOAR
-        final_json_str = json.dumps(final_list, ensure_ascii=False)
+        # Write the merged list back to XSOAR, wrapped under output_key
+        final_json_str = json.dumps({output_key: final_list}, ensure_ascii=False)
         set_res = demisto.executeCommand("setList", {"listName": list_name, "listData": final_json_str})
         if is_error(set_res):
             return_error(f"Failed to write list '{list_name}': {set_res[0]['Contents']}")
