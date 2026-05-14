@@ -36,21 +36,35 @@ def get_entra_token(tenant_id: str, client_id: str, client_secret: str) -> str:
 
     return token
 
-def get_keyfactor_eab(token: str, km_endpoint: str) -> dict:
+def get_keyfactor_eab(token: str, base_url: str, template: str, renew: bool = False) -> dict:
     """
-    Send a GET request to the Keyfactor ACME API using the obtained token to retrieve EAB credentials.
-    This also serves as an excellent "Status / Auth Check" connectivity test.
+    Query the Keyfactor ACME KeyManagement API to retrieve EAB credentials.
+
+    GET  /ACME/KeyManagement  - retrieves existing EAB credentials (non-destructive)
+    POST /ACME/KeyManagement  - renews EAB credentials (WARNING: invalidates existing
+                                credentials and breaks any active ACME client registrations)
     """
+    # Build endpoint URL; Template specifies which certificate template to use
+    endpoint = f"{base_url.rstrip('/')}/ACME/KeyManagement"
+    params = {'Template': template}
+
     headers = {
         'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Keyfactor-Requested-With': 'APIClient'
     }
 
-    # verify=False bypasses potential internal certificate validation issues. Change to True if a CA bundle is mounted in the XSOAR container
-    response = requests.get(km_endpoint, headers=headers, verify=False)
+    # verify=False bypasses potential internal certificate validation issues.
+    # Change to True (or supply a CA bundle path) if a trusted CA bundle is mounted in the XSOAR container.
+    if renew:
+        response = requests.post(endpoint, headers=headers, params=params, verify=False)
+    else:
+        response = requests.get(endpoint, headers=headers, params=params, verify=False)
 
     if response.status_code < 200 or response.status_code >= 300:
-        raise Exception(f"Keyfactor API request failed. Status: {response.status_code}, Response: {response.text}")
+        raise Exception(
+            f"Keyfactor API request failed. Status: {response.status_code}, Response: {response.text}"
+        )
 
     return response.json()
 
@@ -59,10 +73,13 @@ def main():
         args = demisto.args()
 
         # Extract arguments with static default values
-        tenant_id = args.get('tenant_id', 'b6b2f512-6fd0-42fe-9659-6c5ee67da460')
-        client_id = args.get('client_id', '3d377516-3b5d-41d2-a412-82ce7c9f8d21')
+        tenant_id   = args.get('tenant_id',   'b6b2f512-6fd0-42fe-9659-6c5ee67da460')
+        client_id   = args.get('client_id',   '3d377516-3b5d-41d2-a412-82ce7c9f8d21')
         client_secret = args.get('client_secret')
-        km_endpoint = args.get('km_endpoint', 'https://amfam.keyfactorpki.com/ACME/KeyManagement?Template=ACME.Webserver')
+        base_url    = args.get('base_url',    'https://amfam.keyfactorpki.com')
+        template    = args.get('template',    'ACME.Webserver')
+        # Set renew=true only when you explicitly want to rotate EAB credentials
+        renew       = args.get('renew', 'false').lower() == 'true'
 
         if not client_secret:
             return_error("Argument 'client_secret' is missing. Please provide it via XSOAR arguments/secrets.")
@@ -70,18 +87,23 @@ def main():
         demisto.debug("Step 1: Requesting OAuth token from Entra ID...")
         access_token = get_entra_token(tenant_id, client_id, client_secret)
 
-        demisto.debug(f"Step 2: Connecting to Keyfactor API at {km_endpoint}...")
-        keyfactor_response = get_keyfactor_eab(access_token, km_endpoint)
+        action = "Renewing" if renew else "Retrieving"
+        demisto.debug(f"Step 2: {action} EAB credentials from Keyfactor (template: {template})...")
+        keyfactor_response = get_keyfactor_eab(access_token, base_url, template, renew=renew)
 
-        # Parse the returned keyId and hmacValue
-        key_id = keyfactor_response.get('keyId')
-        hmac_key = keyfactor_response.get('keyValue')
+        # Keyfactor API returns PascalCase field names: KeyId and KeyValue
+        key_id   = keyfactor_response.get('KeyId')   or keyfactor_response.get('keyId')
+        hmac_key = keyfactor_response.get('KeyValue') or keyfactor_response.get('keyValue')
 
-        # Organize output back to XSOAR Context Data
+        if not key_id or not hmac_key:
+            raise Exception(
+                f"EAB credentials missing from Keyfactor response. Raw response: {keyfactor_response}"
+            )
+
         context_data = {
-            'Token': access_token,
-            'EAB_KeyID': key_id,
-            'EAB_HMAC': hmac_key,
+            'Token':       access_token,
+            'EAB_KeyID':   key_id,
+            'EAB_HMAC':    hmac_key,  # Base64Url-encoded HMAC key per ACME RFC 8555
             'RawResponse': keyfactor_response
         }
 
@@ -89,7 +111,11 @@ def main():
             outputs_prefix='KeyfactorACME',
             outputs_key_field='EAB_KeyID',  # Use KeyID as the unique key to avoid overwriting existing entries
             outputs=context_data,
-            readable_output=f"✅ Successfully acquired OAuth token and connected to Keyfactor API.\n**KeyID**: {key_id}"
+            readable_output=(
+                f"Successfully acquired OAuth token and retrieved EAB credentials from Keyfactor.\n"
+                f"**Key ID**: {key_id}\n"
+                f"**Action**: {'Renewed (old credentials invalidated)' if renew else 'Retrieved (existing credentials)'}"
+            )
         )
 
         return_results(command_results)
