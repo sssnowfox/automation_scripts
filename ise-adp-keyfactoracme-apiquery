@@ -1,0 +1,78 @@
+import requests
+import urllib3
+import traceback
+
+# 禁用可能因未验证证书引起的警告 (根据您的环境决定是否需要)
+urllib3.disable_warnings()
+
+def get_entra_token(tenant_id: str, client_id: str, client_secret: str) -> str:
+    """
+    向 Microsoft Entra ID 发起 POST 请求获取 OAuth Token
+    """
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    
+    # 对应 curl 中的 --data-urlencode
+    payload = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'grant_type': 'client_credentials',
+        'scope': f'api://{client_id}/.default'
+    }
+    
+    # 对应 curl 中的 --header
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
+    # 发送请求
+    response = requests.post(url, headers=headers, data=payload)
+    
+    # 错误处理：非 2xx 状态码抛出异常
+    if response.status_code < 200 or response.status_code >= 300:
+        raise Exception(f"Failed to get token. Status: {response.status_code}, Response: {response.text}")
+        
+    response_json = response.json()
+    token = response_json.get('access_token')
+    
+    if not token:
+        raise Exception("Access token not found in the response payload.")
+        
+    return token
+
+def main():
+    try:
+        # 获取 XSOAR 传入的参数。提供默认值以节省测试时间，但允许在 Playbook 中被覆盖
+        args = demisto.args()
+        
+        tenant_id = args.get('tenant_id', 'b6b2f512-6fd0-42fe-9659-6c5ee67da460')
+        client_id = args.get('client_id', '3d377516-3b5d-41d2-a412-82ce7c9f8d21')
+        client_secret = args.get('client_secret')
+        
+        if not client_secret:
+            return_error("Argument 'client_secret' is missing. Please provide the secret from 1Password.")
+
+        # 调用核心函数
+        access_token = get_entra_token(tenant_id, client_id, client_secret)
+        
+        # 将结果输出回 XSOAR Context Data
+        # 这样下一个节点就可以通过 ${KeyfactorACME.Token} 引用它
+        command_results = CommandResults(
+            outputs_prefix='KeyfactorACME',
+            outputs_key_field='',
+            outputs={
+                'Token': access_token,
+                'TenantID': tenant_id,
+                'ClientID': client_id
+            },
+            readable_output="✅ Successfully acquired OAuth token from Entra ID."
+        )
+        
+        return_results(command_results)
+
+    except Exception as e:
+        demisto.error(traceback.format_exc()) # 将完整报错写入 XSOAR 平台日志
+        return_error(f"Failed to execute Entra ID token request.\nError: {str(e)}")
+
+# XSOAR 脚本的标准入口点
+if __name__ in ('__main__', '__builtin__', 'builtins'):
+    main()
