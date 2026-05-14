@@ -55,7 +55,12 @@ def query_keyfactor_api(token: str, base_url: str, endpoint: str, http_method: s
             f"Keyfactor API request failed. Status: {response.status_code}, Response: {response.text}"
         )
 
-    return response.json() if response.text else {}
+    try:
+        body = response.json()
+    except Exception:
+        body = response.text
+
+    return {'status_code': response.status_code, 'body': body}
 
 def main():
     try:
@@ -81,7 +86,7 @@ def main():
             outputs_prefix='KeyfactorACME',
             outputs_key_field='',
             outputs={'RawResponse': api_response},
-            readable_output=f"Successfully called {http_method.upper()} /ACME/{endpoint.lstrip('/')}.\nResponse: {api_response}"
+            readable_output=f"Successfully called {http_method.upper()} /ACME/{endpoint.lstrip('/')}.\nStatus: {api_response.get('status_code')}\nResponse: {api_response.get('body')}"
         )
 
         return_results(command_results)
