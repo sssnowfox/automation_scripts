@@ -40,7 +40,7 @@ def query_keyfactor_api(token: str, api_server: str, api_command: str, http_meth
     """
     url = f"{api_server.rstrip('/')}/ACME/{api_command.lstrip('/')}"
     if api_command_extension:
-        url = f"{url}/{api_command_extension.strip('/')}"
+        url = f"{url}{api_command_extension}"
 
     headers = {
         'Authorization': f'Bearer {token}',
