@@ -2,7 +2,7 @@ import requests
 import urllib3
 import traceback
 
-# Disable warnings that may be caused by unverified certificates (adjust as needed for your environment)
+# Disable warnings for unverified certificates (useful when querying internal PKI without a provided root CA bundle)
 urllib3.disable_warnings()
 
 def get_entra_token(tenant_id: str, client_id: str, client_secret: str) -> str:
@@ -10,69 +10,93 @@ def get_entra_token(tenant_id: str, client_id: str, client_secret: str) -> str:
     Send a POST request to Microsoft Entra ID to obtain an OAuth token
     """
     url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-    
-    # Corresponds to --data-urlencode in curl
+
     payload = {
         'client_id': client_id,
         'client_secret': client_secret,
         'grant_type': 'client_credentials',
         'scope': f'api://{client_id}/.default'
     }
-    
-    # Corresponds to --header in curl
+
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded'
     }
-    
-    # Send the request
+
+    # Since we are hitting a public Microsoft endpoint, keep the default verify=True
     response = requests.post(url, headers=headers, data=payload)
-    
-    # Error handling: raise exception for non-2xx status codes
+
     if response.status_code < 200 or response.status_code >= 300:
         raise Exception(f"Failed to get token. Status: {response.status_code}, Response: {response.text}")
-        
+
     response_json = response.json()
     token = response_json.get('access_token')
-    
+
     if not token:
         raise Exception("Access token not found in the response payload.")
-        
+
     return token
+
+def get_keyfactor_eab(token: str, km_endpoint: str) -> dict:
+    """
+    Send a GET request to the Keyfactor ACME API using the obtained token to retrieve EAB credentials.
+    This also serves as an excellent "Status / Auth Check" connectivity test.
+    """
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+    # verify=False bypasses potential internal certificate validation issues. Change to True if a CA bundle is mounted in the XSOAR container
+    response = requests.get(km_endpoint, headers=headers, verify=False)
+
+    if response.status_code < 200 or response.status_code >= 300:
+        raise Exception(f"Keyfactor API request failed. Status: {response.status_code}, Response: {response.text}")
+
+    return response.json()
 
 def main():
     try:
-        # Get parameters passed in from XSOAR. Default values are provided for testing convenience but can be overridden in a Playbook
         args = demisto.args()
-        
+
+        # Extract arguments with static default values
         tenant_id = args.get('tenant_id', 'b6b2f512-6fd0-42fe-9659-6c5ee67da460')
         client_id = args.get('client_id', '3d377516-3b5d-41d2-a412-82ce7c9f8d21')
         client_secret = args.get('client_secret')
-        
-        if not client_secret:
-            return_error("Argument 'client_secret' is missing. Please provide the secret from 1Password.")
+        km_endpoint = args.get('km_endpoint', 'https://amfam.keyfactorpki.com/ACME/KeyManagement?Template=ACME.Webserver')
 
-        # Call the core function
+        if not client_secret:
+            return_error("Argument 'client_secret' is missing. Please provide it via XSOAR arguments/secrets.")
+
+        demisto.debug("Step 1: Requesting OAuth token from Entra ID...")
         access_token = get_entra_token(tenant_id, client_id, client_secret)
-        
-        # Output the result back to XSOAR Context Data
-        # The next node can then reference it via ${KeyfactorACME.Token}
+
+        demisto.debug(f"Step 2: Connecting to Keyfactor API at {km_endpoint}...")
+        keyfactor_response = get_keyfactor_eab(access_token, km_endpoint)
+
+        # Parse the returned keyId and hmacValue
+        key_id = keyfactor_response.get('keyId')
+        hmac_key = keyfactor_response.get('keyValue')
+
+        # Organize output back to XSOAR Context Data
+        context_data = {
+            'Token': access_token,
+            'EAB_KeyID': key_id,
+            'EAB_HMAC': hmac_key,
+            'RawResponse': keyfactor_response
+        }
+
         command_results = CommandResults(
             outputs_prefix='KeyfactorACME',
-            outputs_key_field='',
-            outputs={
-                'Token': access_token,
-                'TenantID': tenant_id,
-                'ClientID': client_id
-            },
-            readable_output="✅ Successfully acquired OAuth token from Entra ID."
+            outputs_key_field='EAB_KeyID',  # Use KeyID as the unique key to avoid overwriting existing entries
+            outputs=context_data,
+            readable_output=f"✅ Successfully acquired OAuth token and connected to Keyfactor API.\n**KeyID**: {key_id}"
         )
-        
+
         return_results(command_results)
 
     except Exception as e:
-        demisto.error(traceback.format_exc()) # Write the full error to XSOAR platform logs
-        return_error(f"Failed to execute Entra ID token request.\nError: {str(e)}")
+        demisto.error(traceback.format_exc())
+        return_error(f"Execution Failed.\nError: {str(e)}")
 
-# Standard entry point for XSOAR scripts
 if __name__ in ('__main__', '__builtin__', 'builtins'):
     main()
