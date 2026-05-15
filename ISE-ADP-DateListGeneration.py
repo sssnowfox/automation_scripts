@@ -2,9 +2,10 @@ from datetime import datetime, timedelta
 
 def main():
     try:
-        start_time_str = demisto.args().get('starttime')
-        end_time_str = demisto.args().get('endtime')
-        date_format = demisto.args().get('date_format', '%Y-%m-%d')
+        args = demisto.args()
+        start_time_str = args.get('starttime')
+        end_time_str = args.get('endtime')
+        date_format = args.get('date_format', '%Y-%m-%d')
 
         # Convert strings to date objects
         start_date = datetime.strptime(start_time_str, date_format)
@@ -22,16 +23,17 @@ def main():
             date_list.append(current_date.strftime(date_format))
             current_date += timedelta(days=1)
 
-        # Output the list directly to Context Data
-        demisto.results({
-            'Type': entryTypes['note'],
-            'Contents': date_list,
-            'ContentsFormat': formats['json'],
-            'HumanReadable': f"Generated {len(date_list)} dates between {start_time_str} and {end_time_str}.",
-            'EntryContext': {
-                'DateRangeList': date_list
-            }
-        })
+        command_result = CommandResults(
+            outputs_prefix='DateRangeList',
+            outputs_key_field='',
+            outputs=date_list,
+            readable_output=tableToMarkdown(
+                'Generated Date List',
+                [{'Date': d} for d in date_list],
+                headers=['Date']
+            )
+        )
+        return_results(command_result)
 
     except Exception as e:
         return_error(f"Failed to generate dates: {str(e)}")
