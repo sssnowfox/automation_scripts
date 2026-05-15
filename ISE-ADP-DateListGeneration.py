@@ -8,9 +8,9 @@ def main():
         date_format = args.get('date_format', '%Y-%m-%d')
         output_key = args.get('output_key', 'DateRangeList')
 
-        # Convert strings to date objects
-        start_date = datetime.strptime(start_time_str, date_format)
-        end_date = datetime.strptime(end_time_str, date_format)
+        # Strip time/timezone portion if present (e.g. "2026-05-14T11:12:52-04:00" -> "2026-05-14")
+        start_date = datetime.strptime(start_time_str.split('T')[0], date_format)
+        end_date = datetime.strptime(end_time_str.split('T')[0], date_format)
 
         # Validate that start date is not after end date
         if start_date > end_date:
