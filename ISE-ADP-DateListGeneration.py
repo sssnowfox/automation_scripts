@@ -6,6 +6,7 @@ def main():
         start_time_str = args.get('starttime')
         end_time_str = args.get('endtime')
         date_format = args.get('date_format', '%Y-%m-%d')
+        output_key = args.get('output_key', 'DateRangeList')
 
         # Convert strings to date objects
         start_date = datetime.strptime(start_time_str, date_format)
@@ -25,8 +26,8 @@ def main():
 
         command_result = CommandResults(
             outputs_prefix='DateRangeList',
-            outputs_key_field='',
-            outputs=date_list,
+            outputs_key_field=output_key,
+            outputs={output_key: date_list},
             readable_output=tableToMarkdown(
                 'Generated Date List',
                 [{'Date': d} for d in date_list],
