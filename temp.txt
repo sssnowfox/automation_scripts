@@ -1,2 +1,25 @@
-[Tt]he certificate for\s+(.*?)\s+will expire[\s\S]*?Subject Alternative Name\(s\):\s*([\s\S]*?)(?=\s*(?:Certificate Template|Original Requestor|Issued|Expires):)[\s\S]*?Expires:\s*([\s\S]*?)(?=\s*Certificate Thumbprint:)[\s\S]*?Certificate Thumbprint:\s*([A-Fa-f0-9]+)(?:[\s\S]*?Submitted SNOW Queue:\s*(.*?)(?=\s*[Ii]f you|\s*Event Source|\s*Public Notes|\n|$))?
-cert_cn,cert_sans,cert_expiration_date,cert_thumbprint,servicenow_queue
+这里是 Keyfactor ACME API 的主要功能端点（Endpoints）、功能描述（Description）以及所需角色（Required Role）的英文汇总表格。
+Keyfactor ACME API 主要使用基于声明（Claims-based）的访问控制（如 Oauth 令牌中的角色），最常见的基础权限角色包括：**SuperAdmin**（超级管理员，可配置系统、声明和标识符）、**AccountAdmin**（账户管理员，可管理和吊销账户）以及 **AuthorizedUser / EnrollmentUser**（授权注册用户，用于获取 EAB 密钥并管理证书）。
+| API Endpoint / Function Name | Description (Desc) | Required Role |
+|---|---|---|
+| **GET /Admin/Accounts/List** | Returns a list of all accounts registered with the Keyfactor ACME server. | AccountAdmin / SuperAdmin |
+| **PUT /Admin/Accounts/{id}** | Updates the certificate template mapping for a specific account registered from an ACME client. | AccountAdmin / SuperAdmin |
+| **POST /Admin/Accounts/Revoke** | Revokes a specific ACME client account and its associated External Account Binding (EAB) keys. | AccountAdmin / SuperAdmin |
+| **GET /AppSettings** | Returns a list of all application settings currently configured in the Keyfactor ACME environment. | SuperAdmin |
+| **PUT /AppSettings/{id}** | Updates a specific application setting based on its defined ID. | SuperAdmin |
+| **GET /Claims** 
+ **POST /Claims** | Lists all configured claims, or creates a new claim mapping for an entity (user/group) to grant permissions. | SuperAdmin |
+| **GET / PUT / DELETE /Claims/{id}** | Retrieves, updates, or deletes a specific user/group claim based on the provided ID. | SuperAdmin |
+| **GET /Claims/AvailableRoles** | Returns a list of all possible user roles available within Keyfactor ACME (e.g., SuperAdmin, AccountAdmin). | SuperAdmin |
+| **GET /Identifiers** 
+ **POST /Identifiers** | Retrieves or creates new ACME identifiers (e.g., FQDN, RegEx, Subnet, or Wildcard) to control which domains can be requested. | SuperAdmin |
+| **DELETE /Identifiers/{id}** | Deletes a specific identifier policy using its specified ID. | SuperAdmin |
+| **GET /Identifiers/Types** | Returns a list of all supported identifier types (FQDN, RegEx, IP, etc.) configured in the system. | SuperAdmin |
+| **GET /KeyManagement** | Retrieves the existing External Account Binding (EAB) key for the user, or generates a new one if no key exists. | AuthorizedUser |
+| **POST /KeyManagement** | Renews/Rotates the user's current External Account Binding (EAB) key. | AuthorizedUser |
+| **POST /Revoke** | Initiates a certificate revocation request for a certificate previously issued via the ACME protocol. | EnrollmentUser / AuthorizedUser |
+| **GET /Status** | Checks the health status of the Keyfactor ACME server and its connection to the backend SQL database. | Any Authenticated Role |
+### 角色补充说明：
+ * **SuperAdmin**：拥有最高权限，主要负责全局的 ACME 规则管控（如允许颁发哪些域名的证书 Identifier）、系统设定（AppSettings）和安全声明策略配置（Claims）。
+ * **AccountAdmin**：负责在管理员视角下管控 ACME 客户端账户及其所绑定的模板映射，能够主动清理/吊销不再使用的 ACME 账户。
+ * **AuthorizedUser / EnrollmentUser**：一般由自动化客户端（如 Certbot, cert-manager）使用的业务层角色。仅用来获取和刷新 EAB (External Account Binding) 凭证，并执行日常的证书签发与吊销操作。
